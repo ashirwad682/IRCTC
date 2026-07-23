@@ -122,21 +122,18 @@ app.post('/api/auth/login', async (req, res) => {
     let user = await User.findOne({ username: cleanUsername });
 
     if (!user) {
-      // First-time user registration & credential storage in MongoDB Atlas
-      user = new User({
-        username: cleanUsername,
-        email: `${cleanUsername}@irctc.gov.in`,
-        password: password,
-        fullName: username,
-        walletBalance: 10000
+      return res.status(401).json({
+        success: false,
+        message: 'User ID is not registered. Please create an IRCTC account first.'
       });
-      await user.save();
-      console.log(`[MongoDB Atlas] New user account created & saved: ${cleanUsername}`);
-    } else {
-      // Verify stored password against MongoDB Atlas
-      if (user.password !== password) {
-        return res.status(401).json({ success: false, message: 'Invalid User ID or Password. Please check your credentials.' });
-      }
+    }
+
+    // Verify stored password against MongoDB Atlas
+    if (user.password !== password) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid User ID or Password. Please check your credentials.'
+      });
     }
 
     res.json({
