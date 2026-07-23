@@ -1,6 +1,6 @@
 // Centralized API Base URL Configuration for Development & Vercel Production
 export const getApiBaseUrl = () => {
-  if (typeof window !== 'undefined' && import.meta.env.VITE_API_BASE_URL !== undefined) {
+  if (typeof window !== 'undefined' && import.meta.env.VITE_API_BASE_URL !== undefined && import.meta.env.VITE_API_BASE_URL !== '') {
     return import.meta.env.VITE_API_BASE_URL;
   }
   // In production (e.g. Vercel deployment), relative URL '/api' points to the same domain's serverless functions

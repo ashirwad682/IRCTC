@@ -237,18 +237,19 @@ app.get('/api/auth/profile/:username', async (req, res) => {
 app.post('/api/bookings/create', async (req, res) => {
   try {
     const {
-      pnr: clientPnr, username, trainNumber, trainName, from, to, boardingAt, depTime, arrTime, date,
+      pnr: clientPnr, username, trainNumber, trainName, from, to, boardingAt, boardingDate, boardingDepTime, depTime, arrTime, date,
       classCode, quota, passengers, ticketFare, convenienceFee, insurancePremium, totalPaid, txnId: clientTxnId
     } = req.body;
 
     if (!trainNumber || !from || !to) {
-      return res.status(400).json({ success: false, message: 'Missing required booking fields' });
+      return res.status(400).json({ success: false, message: 'Missing required booking fields (trainNumber, from, to)' });
     }
 
     // Generate or use client-side authentic 10-digit PNR
     const pnr = clientPnr || Math.floor(1000000000 + Math.random() * 9000000000).toString();
     const txnId = clientTxnId || `TXN_${Date.now()}`;
-    const cleanUsername = String(username || 'ASHIRWAD_IRCTC').toLowerCase();
+    const cleanUsername = String(username || 'ashirwad_irctc').toLowerCase().trim();
+    const resolvedDate = date || new Date().toISOString().split('T')[0];
 
     let booking = await Booking.findOne({ pnr });
     if (booking) {
@@ -258,16 +259,18 @@ app.post('/api/bookings/create', async (req, res) => {
       booking.from = from;
       booking.to = to;
       booking.boardingAt = boardingAt || from;
+      booking.boardingDate = boardingDate || booking.boardingDate || resolvedDate;
+      booking.boardingDepTime = boardingDepTime || booking.boardingDepTime || depTime;
       booking.depTime = depTime || booking.depTime;
       booking.arrTime = arrTime || booking.arrTime;
-      booking.date = date;
+      booking.date = resolvedDate;
       booking.classCode = classCode || booking.classCode;
       booking.quota = quota || booking.quota;
       booking.passengers = passengers || booking.passengers;
-      booking.ticketFare = ticketFare;
-      booking.convenienceFee = convenienceFee;
-      booking.insurancePremium = insurancePremium;
-      booking.totalPaid = totalPaid;
+      booking.ticketFare = ticketFare ?? booking.ticketFare;
+      booking.convenienceFee = convenienceFee ?? booking.convenienceFee;
+      booking.insurancePremium = insurancePremium ?? booking.insurancePremium;
+      booking.totalPaid = totalPaid ?? booking.totalPaid;
       booking.txnId = txnId;
       booking.status = 'BOOKED';
       booking.isCancelled = false;
@@ -281,9 +284,11 @@ app.post('/api/bookings/create', async (req, res) => {
         from,
         to,
         boardingAt: boardingAt || from,
+        boardingDate: boardingDate || resolvedDate,
+        boardingDepTime: boardingDepTime || depTime || '16:55',
         depTime: depTime || '16:55',
         arrTime: arrTime || '08:35',
-        date,
+        date: resolvedDate,
         classCode: classCode || '3A',
         quota: quota || 'GENERAL (GN)',
         passengers: passengers || [{ name: 'ASHIRWAD KUMAR', age: 21, gender: 'M', berth: 'CNF/B10/20/LB' }],
@@ -298,9 +303,10 @@ app.post('/api/bookings/create', async (req, res) => {
       await booking.save();
     }
 
+    console.log(`[MongoDB Atlas] Booking successfully saved for PNR ${pnr} under user: ${cleanUsername}`);
     res.json({
       success: true,
-      message: 'Ticket booked and saved to MongoDB',
+      message: 'Ticket booked and saved to MongoDB Database',
       booking
     });
   } catch (err) {

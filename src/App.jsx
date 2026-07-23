@@ -315,9 +315,8 @@ export default function App() {
       .then(res => res.json())
       .then(data => {
         if (data && data.success && Array.isArray(data.bookings)) {
-          // Extra client-side safety: case-insensitive check
           const ownBookings = data.bookings.filter(b =>
-            !b.username || String(b.username).toLowerCase() === cleanUser
+            b.username && String(b.username).toLowerCase() === cleanUser
           );
           setUserBookings(ownBookings);
         }
@@ -548,39 +547,42 @@ export default function App() {
       booking.reservationChoice
     );
 
+    const targetUsername = currentUser?.username || 'ashirwad_irctc';
+
     const stampedBooking = {
       ...booking,
+      username: targetUsername,
       passengers: stampedPassengers,
       bookingStatusAtTime: seatStatusAtBooking.statusText,
       status: 'BOOKED',
     };
 
-    // ⚡ INSTANT: Update UI immediately — no waiting for network
+    // Update UI immediately
     setConfirmedBooking(stampedBooking);
-    setUserBookings(prev => [stampedBooking, ...prev]);
+    setUserBookings(prev => [stampedBooking, ...prev.filter(b => b.pnr !== stampedBooking.pnr)]);
     setShowTicketModal(true);
 
-    // Deduct seat inventory (synchronous localStorage — very fast)
+    // Deduct seat inventory
     adjustSeatsOnBooking(booking.trainNumber, booking.classCode, booking.date, booking.passengers?.length || 1);
 
-    // 🔄 BACKGROUND: Persist to localStorage non-blocking
+    // Persist to localStorage for offline cache
     queueMicrotask(() => {
       try {
         const stored = JSON.parse(localStorage.getItem('railx_user_bookings') || '[]');
-        stored.unshift(stampedBooking);
-        localStorage.setItem('railx_user_bookings', JSON.stringify(stored));
+        const updatedLocal = [stampedBooking, ...stored.filter(b => b.pnr !== stampedBooking.pnr)];
+        localStorage.setItem('railx_user_bookings', JSON.stringify(updatedLocal));
       } catch (e) {
         console.warn('localStorage persist notice:', e);
       }
     });
 
-    // 🌐 Sync to MongoDB Atlas Database & Refetch to Update Booked Ticket History
+    // 🌐 Save to MongoDB Atlas Database & Sync
     fetch(`${API_BASE_URL}/api/bookings/create`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         pnr: stampedBooking.pnr,
-        username: currentUser?.username || 'ashirwad_irctc',
+        username: targetUsername,
         trainNumber: stampedBooking.trainNumber,
         trainName: stampedBooking.trainName,
         from: stampedBooking.from,
@@ -590,7 +592,7 @@ export default function App() {
         boardingDepTime: stampedBooking.boardingDepTime,
         depTime: stampedBooking.depTime,
         arrTime: stampedBooking.arrTime,
-        date: stampedBooking.date,
+        date: stampedBooking.date || new Date().toISOString().split('T')[0],
         classCode: stampedBooking.classCode,
         quota: stampedBooking.quota,
         passengers: stampedPassengers,
@@ -603,22 +605,23 @@ export default function App() {
     })
     .then(res => res.json())
     .then(data => {
-      // Re-fetch tickets from Database to ensure exact database records in state & Booked Ticket History!
-      const currentUname = currentUser?.username || 'ASHIRWAD_IRCTC';
-      const cleanUser = String(currentUname).toLowerCase();
-      const fetchEndpoint = `${API_BASE_URL}/api/bookings/user/${encodeURIComponent(currentUname)}`;
-      fetch(fetchEndpoint)
-        .then(r => r.json())
-        .then(dbData => {
-          if (dbData && dbData.success && Array.isArray(dbData.bookings)) {
-            const ownBookings = dbData.bookings.filter(b =>
-              !b.username || String(b.username).toLowerCase() === cleanUser
-            );
-            setUserBookings(ownBookings);
-          }
-        });
+      if (data && data.success && data.booking) {
+        console.log(`[MongoDB Atlas] Ticket ${stampedBooking.pnr} persisted under account: ${targetUsername}`);
+        // Re-fetch user's bookings from MongoDB Database to ensure exact database persistence in state
+        const cleanUser = String(targetUsername).toLowerCase();
+        fetch(`${API_BASE_URL}/api/bookings/user/${encodeURIComponent(targetUsername)}`)
+          .then(r => r.json())
+          .then(dbData => {
+            if (dbData && dbData.success && Array.isArray(dbData.bookings)) {
+              const ownBookings = dbData.bookings.filter(b =>
+                b.username && String(b.username).toLowerCase() === cleanUser
+              );
+              setUserBookings(ownBookings);
+            }
+          });
+      }
     })
-    .catch(e => console.warn('MongoDB database sync notice:', e));
+    .catch(e => console.error('MongoDB database creation error:', e));
   };
 
   // Real-time cancellation handler: Updates state across entire application without page refresh

@@ -18,6 +18,23 @@ export default function BookedTicketHistoryPage({ onBack, onViewTicket, onCancel
     setLocalUserBookings(userBookings);
   }, [userBookings]);
 
+  useEffect(() => {
+    if (currentUser?.username) {
+      const cleanUser = String(currentUser.username).toLowerCase();
+      fetch(`${API_BASE_URL}/api/bookings/user/${encodeURIComponent(currentUser.username)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.success && Array.isArray(data.bookings)) {
+            const ownBookings = data.bookings.filter(b =>
+              b.username && String(b.username).toLowerCase() === cleanUser
+            );
+            setLocalUserBookings(ownBookings);
+          }
+        })
+        .catch(err => console.warn('Database fetch in BookedTicketHistory notice:', err));
+    }
+  }, [currentUser?.username]);
+
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-slate-50 py-12 px-4 flex items-center justify-center">

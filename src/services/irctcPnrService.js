@@ -13,7 +13,69 @@ export async function fetchOfficialIrctcPnrStatus(pnrNumber, userBookings = []) 
     throw new Error('PNR number must be a valid 10-digit numeric code.');
   }
 
-  // 1. Check local user account bookings & localStorage first for exact match
+  // 1. Query MongoDB Atlas cloud database via Express API endpoint first
+  try {
+    const mongoRes = await fetch(`${API_BASE_URL}/api/bookings/pnr/${cleanPnr}`);
+    if (mongoRes.ok) {
+      const mongoData = await mongoRes.json();
+      if (mongoData && mongoData.success && mongoData.booking) {
+        const b = mongoData.booking;
+        const isCancelled = b.isCancelled || (b.passengers || []).every(p => String(p.status || p.berth || '').toUpperCase().includes('CAN'));
+
+        return normalizeIrctcResponse({
+          pnrNumber: b.pnr,
+          trainNumber: b.trainNumber || '12952',
+          trainName: b.trainName || 'MUMBAI RAJDHANI',
+          bookingDate: b.bookingDate || '20-Jul-2026',
+          dateOfJourney: b.date || '26-Jul-2026',
+          fromStationCode: b.from?.split(' ')?.[0] || 'NDLS',
+          fromStationName: b.from || 'New Delhi',
+          toStationCode: b.to?.split(' ')?.[0] || 'MMCT',
+          toStationName: b.to || 'Mumbai Central',
+          boardingStationCode: b.boardingAt?.split(' ')?.[0] || b.from?.split(' ')?.[0] || 'NDLS',
+          boardingStationName: b.boardingAt || b.from || 'New Delhi',
+          reservationUpToCode: b.to?.split(' ')?.[0] || 'MMCT',
+          reservationUpToName: b.to || 'Mumbai Central',
+          journeyClass: b.classCode || '3A',
+          journeyClassName: getClassName(b.classCode),
+          quota: b.quota || 'GN',
+          quotaName: 'General',
+          chartStatus: isCancelled ? 'TICKET CANCELLED' : 'CHART PREPARED',
+          cancelledAt: b.cancellationDetails?.cancelledAt || b.cancelledDate || null,
+          platformNumber: '1',
+          trainDepartureTime: b.depTime || '16:55',
+          trainArrivalTime: b.arrTime || '08:35',
+          duration: '15h 40m',
+          distance: 1384,
+          numberOfPassengers: b.passengers?.length || 1,
+          passengerList: (b.passengers || []).map((p, idx) => {
+            const pCancelled = isCancelled || String(p.status || p.berth || '').toUpperCase().includes('CAN');
+            return {
+              passengerSerialNumber: idx + 1,
+              passengerName: p.name || `PASSENGER ${idx + 1}`,
+              passengerAge: p.age || 30,
+              passengerGender: p.gender?.charAt(0)?.toUpperCase() || 'M',
+              bookingStatus: pCancelled ? 'CAN / MODIFIED' : (p.berth || `CNF/B10/${20 + idx * 13}/LB`),
+              currentStatus: pCancelled ? 'CANCELLED / REFUND PROCESSED' : (p.berth || `CNF / B10 / ${20 + idx * 13} (Lower Berth)`),
+              bookingCoachId: pCancelled ? '-' : 'B10',
+              bookingBerthNo: pCancelled ? '-' : String(20 + idx * 13),
+              bookingBerthCode: pCancelled ? '-' : 'LB',
+              currentCoachId: pCancelled ? '-' : 'B10',
+              currentBerthNo: pCancelled ? '-' : String(20 + idx * 13),
+              currentBerthCode: pCancelled ? '-' : 'LB',
+              cateringOption: 'NO FOOD'
+            };
+          }),
+          isAccountBooking: true,
+          rawBookingRef: b
+        });
+      }
+    }
+  } catch (e) {
+    console.warn("MongoDB Atlas PNR lookup fallback notice:", e);
+  }
+
+  // 2. Check local user account bookings & state as fallback
   const storedLocal = JSON.parse(localStorage.getItem('railx_user_bookings') || '[]');
   const allBookings = [...userBookings, ...storedLocal];
   const userMatch = allBookings.find(b => String(b.pnr).replace(/\D/g, '') === cleanPnr);
