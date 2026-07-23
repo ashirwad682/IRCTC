@@ -84,25 +84,44 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Username, Email and Password are required' });
     }
 
-    const existingUser = await User.findOne({ $or: [{ username }, { email }] });
+    const cleanUsername = String(username).toLowerCase().trim();
+    const cleanEmail = String(email).toLowerCase().trim();
+
+    const existingUser = await User.findOne({
+      $or: [
+        { username: cleanUsername },
+        { email: cleanEmail },
+        { username: new RegExp(`^${cleanUsername}$`, 'i') }
+      ]
+    });
+
     if (existingUser) {
-      return res.status(400).json({ success: false, message: 'Username or Email already registered' });
+      return res.status(400).json({ success: false, message: 'User ID or Email already registered in Database' });
     }
 
     const newUser = new User({
-      username,
-      email,
-      password, // In production, hash with bcrypt
+      username: cleanUsername,
+      email: cleanEmail,
+      password: password,
       fullName: fullName || username,
       phone: phone || '',
       walletBalance: 10000
     });
 
     await newUser.save();
+    console.log(`[MongoDB Atlas] User account registered & saved to database: ${cleanUsername}`);
+
     res.json({
       success: true,
-      message: 'Account created successfully in MongoDB',
-      user: { username: newUser.username, email: newUser.email, fullName: newUser.fullName, walletBalance: newUser.walletBalance }
+      message: 'Account created and saved to MongoDB Database',
+      user: {
+        id: newUser._id,
+        username: newUser.username,
+        email: newUser.email,
+        fullName: newUser.fullName,
+        phone: newUser.phone,
+        walletBalance: newUser.walletBalance
+      }
     });
   } catch (err) {
     console.error('Register error:', err);
@@ -119,31 +138,38 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const cleanUsername = String(username).toLowerCase().trim();
-    let user = await User.findOne({ username: cleanUsername });
+    let user = await User.findOne({
+      $or: [
+        { username: cleanUsername },
+        { username: new RegExp(`^${cleanUsername}$`, 'i') }
+      ]
+    });
 
+    // Throw error if User ID is not registered in database
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: 'User ID is not registered. Please create an IRCTC account first.'
+        message: 'User ID is not registered in the database. Please create an IRCTC account first.'
       });
     }
 
-    // Verify stored password against MongoDB Atlas
+    // Throw error if Password does not match database record
     if (user.password !== password) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid User ID or Password. Please check your credentials.'
+        message: 'Invalid Password. Please check your credentials.'
       });
     }
 
     res.json({
       success: true,
-      message: 'Logged in successfully from MongoDB Atlas',
+      message: 'Logged in successfully from MongoDB Database',
       user: {
         id: user._id,
         username: user.username,
         email: user.email,
         fullName: user.fullName || user.username,
+        phone: user.phone || '',
         walletBalance: user.walletBalance
       }
     });
