@@ -4,12 +4,12 @@ import { X, Eye, EyeOff, Lock, User, ShieldCheck, KeyRound, Mail, Calendar, Arro
 
 export default function LoginModal({ onClose, onLoginSuccess, bookingNotice }) {
   const [isForgotMode, setIsForgotMode] = useState(false);
-  const [username, setUsername] = useState('ashirwad_irctc');
-  const [password, setPassword] = useState('password123');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   // Forgot Password Recovery State
-  const [forgotEmailOrMobile, setForgotEmailOrMobile] = useState('ashirwad@irctc.gov.in');
+  const [forgotEmailOrMobile, setForgotEmailOrMobile] = useState('');
   const [forgotDob, setForgotDob] = useState('2000-01-01');
   const [recoveryStep, setRecoveryStep] = useState(1); // 1: Input details, 2: Enter OTP & Reset, 3: Success
   const [recoveryOtp, setRecoveryOtp] = useState('');
