@@ -1,0 +1,138 @@
+@import "tailwindcss";
+
+/* Official IRCTC Professional Color Theme */
+@layer base {
+  :root {
+    --bg-main: #eff4fe;
+    --text-main: #0f172a;
+    --panel-bg: #ffffff;
+    --panel-border: #e2e8f0;
+    --card-bg: #ffffff;
+    --card-border: #cbd5e1;
+    --irctc-royal: #283593;
+    --irctc-dark-royal: #1a237e;
+    --irctc-indigo: #3f51b5;
+    --irctc-light-bg: #eff4fe;
+    --irctc-notice-bg: #fff3e0;
+    --irctc-notice-border: #ffe0b2;
+    --irctc-notice-text: #e65100;
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background-color: #eff4fe;
+    color: #0f172a;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Outfit', sans-serif;
+  }
+
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Official IRCTC Card & Button Utilities */
+.irctc-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 10px rgba(40, 53, 147, 0.05);
+}
+
+.irctc-card:hover {
+  border-color: #3f51b5;
+  box-shadow: 0 8px 24px rgba(40, 53, 147, 0.12);
+}
+
+.irctc-btn-primary {
+  background-color: #283593;
+  color: #ffffff;
+  font-weight: 800;
+  border-radius: 9999px;
+  transition: all 0.15s ease-in-out;
+}
+
+.irctc-btn-primary:hover {
+  background-color: #1a237e;
+  box-shadow: 0 4px 14px rgba(40, 53, 147, 0.3);
+}
+
+.irctc-class-pill {
+  background-color: #f0f7ff;
+  border: 1px solid #90caf9;
+  color: #1a237e;
+  font-weight: 700;
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+}
+
+.irctc-notice-box {
+  background-color: #fff3e0;
+  border: 1px solid #ffe0b2;
+  color: #e65100;
+  font-weight: 700;
+  font-size: 0.75rem;
+  border-radius: 0.75rem;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #eff4fe;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #90caf9;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3f51b5;
+}
+
+/* Media Print Styles: Ensures full ticket visibility on exactly 1 single A4 page */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 3mm;
+  }
+  
+  html, body {
+    width: 100% !important;
+    height: 100% !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  #e-ticket-print-area, #e-ticket-print-area *,
+  #cancel-ticket-print-area, #cancel-ticket-print-area *,
+  #cancellation-modal-print-area, #cancellation-modal-print-area *,
+  #train-schedule-print-area, #train-schedule-print-area * {
+    visibility: visible !important;
+  }
+
+  #e-ticket-print-area, #cancel-ticket-print-area, #cancellation-modal-print-area, #train-schedule-print-area {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 2mm !important;
+    box-sizing: border-box !important;
+    background: #ffffff !important;
+    overflow: auto !important;
+  }
+}
