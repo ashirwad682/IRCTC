@@ -749,33 +749,70 @@ export const CRIS_REAL_TRAINS = [
 export function searchCrisRealTrains(fromCode, toCode) {
   if (!fromCode || !toCode || fromCode === toCode) return [];
 
+  const stationGroups = [
+    ['NDLS', 'DLI', 'NZM', 'ANVT', 'DEC'], // Delhi
+    ['PNBE', 'PNC', 'RJPB', 'DNR'], // Patna
+    ['MMCT', 'CSMT', 'BDTS', 'LTT', 'DR'], // Mumbai
+    ['HWH', 'SDAH', 'KOAA'], // Kolkata
+    ['SBC', 'YPR'], // Bengaluru
+    ['MAS', 'MS'], // Chennai
+  ];
+
+  const getEquivalents = (code) => {
+    for (const group of stationGroups) {
+      if (group.includes(code)) return group;
+    }
+    return [code];
+  };
+
+  const fromEquivs = getEquivalents(fromCode);
+  const toEquivs = getEquivalents(toCode);
+
   // Match trains where fromCode and toCode exist in the train's official CRIS stop list in order
   const matches = CRIS_REAL_TRAINS.filter(train => {
-    const fromIdx = train.stops.indexOf(fromCode);
-    const toIdx = train.stops.indexOf(toCode);
-    if (fromIdx !== -1 && toIdx !== -1 && fromIdx < toIdx) {
+    if (!train) return false;
+
+    // Derive stops array safely
+    const stops = train.stops || (
+      Array.isArray(train.intermediateStations) && train.intermediateStations.length > 0
+        ? train.intermediateStations.map(st => {
+            if (st.code) return st.code;
+            if (st.name) {
+              const m = st.name.match(/\(([A-Z0-9]+)\)/);
+              if (m) return m[1];
+            }
+            return null;
+          }).filter(Boolean)
+        : [train.from, train.to].filter(Boolean)
+    );
+
+    // Direct match check on derived stops
+    let fIdx = -1;
+    let tIdx = -1;
+
+    for (let i = 0; i < stops.length; i++) {
+      if (fIdx === -1 && fromEquivs.includes(stops[i])) {
+        fIdx = i;
+      }
+      if (toEquivs.includes(stops[i])) {
+        tIdx = i;
+      }
+    }
+
+    if (fIdx !== -1 && tIdx !== -1 && fIdx < tIdx) {
       return true;
     }
-    // Check station code equivalence (e.g. PNBE <-> PNC, NDLS <-> DLI <-> ANVT)
-    const delhiCodes = ['NDLS', 'DLI', 'NZM', 'ANVT', 'DEC'];
-    const patnaCodes = ['PNBE', 'PNC', 'RJPB', 'DNR'];
-    const mumbaiCodes = ['MMCT', 'CSMT', 'BDTS', 'LTT', 'DR'];
-    const kolkataCodes = ['HWH', 'SDAH', 'KOAA'];
-    const blrCodes = ['SBC', 'YPR'];
 
-    const fromIsDelhi = delhiCodes.includes(fromCode);
-    const toIsPatna = patnaCodes.includes(toCode);
-    const fromIsPatna = patnaCodes.includes(fromCode);
-    const toIsDelhi = delhiCodes.includes(toCode);
+    // Direct from/to equivalence match fallback
+    const matchesFrom = fromEquivs.includes(train.from);
+    const matchesTo = toEquivs.includes(train.to);
+    if (matchesFrom && matchesTo) {
+      return true;
+    }
 
-    if (fromIsDelhi && toIsPatna) {
-      return train.stops.some(s => delhiCodes.includes(s)) && train.stops.some(s => patnaCodes.includes(s));
-    }
-    if (fromIsPatna && toIsDelhi) {
-      return train.stops.some(s => patnaCodes.includes(s)) && train.stops.some(s => delhiCodes.includes(s));
-    }
     return false;
   });
 
   return matches;
 }
+

@@ -27,6 +27,7 @@ export default function PaymentGatewayModal({ bookingRequest, onClose, onPayment
     : [{ name: 'ASHIRWAD KUMAR', age: 21, gender: 'Male', nationality: 'India', berth: 'No preference' }];
   const boardingStationObj = bookingRequest?.boardingStation || {};
   const boardingStationName = boardingStationObj.name || fromName || 'NEW DELHI';
+  const journeyDate = bookingRequest?.journeyDate || train?.journeyDate || '';
   const boardingStationDate = boardingStationObj.date || journeyDate || 'Wed, 22 Jul 2026';
 
   const quotaRaw = bookingRequest?.quota || bookingRequest?.selectedQuota || 'GN';
@@ -52,7 +53,7 @@ export default function PaymentGatewayModal({ bookingRequest, onClose, onPayment
   const totalFare = bookingRequest?.totalFare || (ticketFare + convenienceFee + insurancePremium);
 
   // Use journey date passed from search results page, fallback to today
-  const journeyDate = bookingRequest?.journeyDate || new Date().toISOString().split('T')[0];
+  const resolvedJourneyDate = journeyDate || bookingRequest?.journeyDate || new Date().toISOString().split('T')[0];
 
   // ⚡ Live Real-Time Seat Status Calculation (Microsecond Memory Cache)
   const effectiveSeatStatus = getEffectiveSeatStatus(
@@ -317,27 +318,49 @@ export default function PaymentGatewayModal({ bookingRequest, onClose, onPayment
                 </div>
 
                 {/* Route Times Container */}
-                <div className="bg-white/80 p-3 rounded-xl border border-amber-200/50 space-y-2 text-xs">
-                  <div className="flex items-center justify-between font-bold text-slate-800">
-                    <div>
-                      <span className="block font-black text-slate-900">{departureTime}</span>
-                      <span className="text-[10px] text-slate-500">Tue, 21 Jul</span>
-                    </div>
-                    <div className="text-center text-[10px] font-bold text-slate-400">
-                      <span>{duration}</span>
-                      <div className="w-16 h-0.5 bg-blue-300 mx-auto my-0.5"></div>
-                    </div>
-                    <div className="text-right">
-                      <span className="block font-black text-slate-900">{arrivalTime}</span>
-                      <span className="text-[10px] text-slate-500">Wed, 22 Jul</span>
-                    </div>
-                  </div>
+                {(() => {
+                  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                  const dDate = journeyDate ? new Date(journeyDate + 'T00:00:00') : new Date();
+                  const depFormatted = `${days[dDate.getDay()]}, ${dDate.getDate()} ${months[dDate.getMonth()]}`;
 
-                  <div className="flex items-center justify-between text-[11px] font-extrabold text-slate-700 pt-1 border-t border-slate-100">
-                    <span>{fromCode} {fromName}</span>
-                    <span>{toCode} {toName}</span>
-                  </div>
-                </div>
+                  let addDays = 0;
+                  if (departureTime && arrivalTime) {
+                    const [depH, depM] = departureTime.split(':').map(Number);
+                    const [arrH, arrM] = arrivalTime.split(':').map(Number);
+                    if (!isNaN(depH) && !isNaN(arrH) && (arrH * 60 + (arrM || 0) < depH * 60 + (depM || 0))) {
+                      addDays = 1;
+                    }
+                  }
+
+                  const aDate = new Date(dDate);
+                  aDate.setDate(aDate.getDate() + addDays);
+                  const arrFormatted = `${days[aDate.getDay()]}, ${aDate.getDate()} ${months[aDate.getMonth()]}`;
+
+                  return (
+                    <div className="bg-white/80 p-3 rounded-xl border border-amber-200/50 space-y-2 text-xs">
+                      <div className="flex items-center justify-between font-bold text-slate-800">
+                        <div>
+                          <span className="block font-black text-slate-900">{departureTime}</span>
+                          <span className="text-[10px] text-slate-500">{depFormatted}</span>
+                        </div>
+                        <div className="text-center text-[10px] font-bold text-slate-400">
+                          <span>{duration}</span>
+                          <div className="w-16 h-0.5 bg-blue-300 mx-auto my-0.5"></div>
+                        </div>
+                        <div className="text-right">
+                          <span className="block font-black text-slate-900">{arrivalTime}</span>
+                          <span className="text-[10px] text-slate-500">{arrFormatted}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] font-extrabold text-slate-700 pt-1 border-t border-slate-100">
+                        <span>{fromCode} {fromName}</span>
+                        <span>{toCode} {toName}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="text-[11px] font-bold text-slate-700 space-y-0.5 pt-1">
                   <p>Class <span className="font-extrabold text-slate-900">{className}</span> Quota <span className="font-extrabold text-[#0026cd]">{quotaDisplay}</span></p>

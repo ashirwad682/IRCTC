@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { User, Plus, Trash2, ArrowLeft, ChevronDown, Check, ShieldCheck, Info, MapPin, Train, Clock, X, Calendar, CheckCircle2, Lock, Edit2, AlertTriangle, CreditCard } from 'lucide-react';
 import { getEffectiveSeatStatus } from '../services/seatInventoryService';
 
-export default function PassengerDetailsModal({ train, selectedClass, selectedSeats: initialSeats, quota: passedQuota, onClose, onProceedToPayment }) {
+export default function PassengerDetailsModal({ train, selectedClass, selectedSeats: initialSeats, quota: passedQuota, journeyDate: passedJourneyDate, onClose, onProceedToPayment }) {
+  const journeyDate = passedJourneyDate || train?.journeyDate || '';
   // Dynamic Master List sourcing from localStorage or default master list
   const getInitialMasterList = () => {
     try {
@@ -830,27 +831,49 @@ export default function PassengerDetailsModal({ train, selectedClass, selectedSe
                   </div>
 
                   {/* Route & Times */}
-                  <div className="bg-white/80 p-3 rounded-xl border border-amber-200/50 space-y-2 text-xs">
-                    <div className="flex items-center justify-between font-bold text-slate-800">
-                      <div>
-                        <span className="block font-black text-slate-900">{departureTime} PM</span>
-                        <span className="text-[10px] text-slate-500">Wed, 22 Jul</span>
-                      </div>
-                      <div className="text-center text-[10px] font-bold text-slate-400">
-                        <span>{duration}</span>
-                        <div className="w-16 h-0.5 bg-blue-300 mx-auto my-0.5"></div>
-                      </div>
-                      <div className="text-right">
-                        <span className="block font-black text-slate-900">{arrivalTime} AM</span>
-                        <span className="text-[10px] text-slate-500">Thu, 23 Jul</span>
-                      </div>
-                    </div>
+                  {(() => {
+                    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    const dDate = journeyDate ? new Date(journeyDate + 'T00:00:00') : new Date();
+                    const depFormatted = `${days[dDate.getDay()]}, ${dDate.getDate()} ${months[dDate.getMonth()]}`;
 
-                    <div className="flex items-center justify-between text-[11px] font-extrabold text-slate-700 pt-1 border-t border-slate-100">
-                      <span>{fromCode} - {fromName}</span>
-                      <span>{toCode} - {toName}</span>
-                    </div>
-                  </div>
+                    let addDays = 0;
+                    if (departureTime && arrivalTime) {
+                      const [depH, depM] = departureTime.split(':').map(Number);
+                      const [arrH, arrM] = arrivalTime.split(':').map(Number);
+                      if (!isNaN(depH) && !isNaN(arrH) && (arrH * 60 + (arrM || 0) < depH * 60 + (depM || 0))) {
+                        addDays = 1;
+                      }
+                    }
+
+                    const aDate = new Date(dDate);
+                    aDate.setDate(aDate.getDate() + addDays);
+                    const arrFormatted = `${days[aDate.getDay()]}, ${aDate.getDate()} ${months[aDate.getMonth()]}`;
+
+                    return (
+                      <div className="bg-white/80 p-3 rounded-xl border border-amber-200/50 space-y-2 text-xs">
+                        <div className="flex items-center justify-between font-bold text-slate-800">
+                          <div>
+                            <span className="block font-black text-slate-900">{departureTime}</span>
+                            <span className="text-[10px] text-slate-500">{depFormatted}</span>
+                          </div>
+                          <div className="text-center text-[10px] font-bold text-slate-400">
+                            <span>{duration}</span>
+                            <div className="w-16 h-0.5 bg-blue-300 mx-auto my-0.5"></div>
+                          </div>
+                          <div className="text-right">
+                            <span className="block font-black text-slate-900">{arrivalTime}</span>
+                            <span className="text-[10px] text-slate-500">{arrFormatted}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] font-extrabold text-slate-700 pt-1 border-t border-slate-100">
+                          <span>{fromCode} - {fromName}</span>
+                          <span>{toCode} - {toName}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   <div className="text-[11px] font-bold text-slate-700 space-y-0.5">
                     <p>Class: <span className="font-extrabold text-slate-900">{className}</span> | Quota: <span className="font-extrabold text-[#0026cd]">{quotaDisplay}</span></p>

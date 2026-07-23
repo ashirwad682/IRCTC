@@ -17,24 +17,50 @@ const io = new SocketIOServer(server, {
 app.use(cors());
 app.use(express.json());
 
-// MongoDB Database Connection helper with pooling & Atlas cloud fallback
-export const connectDB = async () => {
-  if (mongoose.connection.readyState >= 1) return;
+let cachedConn = null;
 
-  const LOCAL_URI = 'mongodb://127.0.0.1:27017/irctc_db';
+// MongoDB Database Connection helper with pooling & Atlas cloud default for Serverless & Express
+export const connectDB = async () => {
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
+
+  if (cachedConn) {
+    try {
+      await cachedConn;
+      if (mongoose.connection.readyState === 1) {
+        return mongoose.connection;
+      }
+    } catch (e) {
+      cachedConn = null;
+    }
+  }
+
   const ATLAS_URI = 'mongodb+srv://IRCTC:irctc123@irctc.ob9mxns.mongodb.net/irctc_db?retryWrites=true&w=majority&appName=IRCTC';
-  const MONGO_URI = process.env.MONGO_URI || (process.env.VERCEL ? ATLAS_URI : LOCAL_URI);
+  const LOCAL_URI = 'mongodb://127.0.0.1:27017/irctc_db';
+  const MONGO_URI = process.env.MONGO_URI || ATLAS_URI;
 
   try {
-    await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 5000 });
-    console.log('✅ Connected to MongoDB Database [irctc_db]');
+    cachedConn = mongoose.connect(MONGO_URI, {
+      serverSelectionTimeoutMS: 8000,
+      connectTimeoutMS: 10000,
+    });
+    await cachedConn;
+    console.log('✅ Connected to Primary Production MongoDB Database [irctc_db]');
+    return mongoose.connection;
   } catch (err) {
-    console.warn('⚠️ Primary MongoDB connection failed, attempting fallback Atlas connection...', err.message);
+    console.warn('⚠️ Primary MongoDB Atlas connection failed, attempting fallback local connection...', err.message);
+    cachedConn = null;
     try {
-      await mongoose.connect(ATLAS_URI, { serverSelectionTimeoutMS: 5000 });
-      console.log('✅ Connected to MongoDB Atlas Cloud Database [irctc_db]');
-    } catch (atlasErr) {
-      console.error('❌ MongoDB Atlas Connection Error:', atlasErr.message);
+      await mongoose.connect(LOCAL_URI, {
+        serverSelectionTimeoutMS: 3000,
+        connectTimeoutMS: 5000,
+      });
+      console.log('✅ Connected to Fallback Local MongoDB Database [irctc_db]');
+      return mongoose.connection;
+    } catch (localErr) {
+      console.error('❌ MongoDB Connection Error:', localErr.message);
+      throw localErr;
     }
   }
 };

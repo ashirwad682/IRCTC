@@ -312,36 +312,61 @@ export default function TrainSearchResultsPage({ fromStation: initialFrom, toSta
                   </div>
 
                   {/* Center Column: Departure, Duration Timeline & Arrival (Col 5) */}
-                  <div className="lg:col-span-5 flex items-center justify-between text-center px-2 lg:px-4 lg:border-r lg:border-slate-200">
-                    
-                    {/* Departure */}
-                    <div className="text-left">
-                      <span className="text-2xl font-black text-slate-900 font-mono leading-none block">{train.departureTime}</span>
-                      <span className="text-xs font-bold text-slate-700 block mt-1">Wed, 22 Jul</span>
-                      <span className="text-xs font-black text-slate-900 block mt-1.5 uppercase">{train.from}</span>
-                      <span className="text-[11px] text-slate-500 font-medium block truncate max-w-[120px]">{train.fromName}</span>
-                    </div>
+                  {(() => {
+                    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    const baseIso = selectedDate || activeDateTab;
+                    const dDate = baseIso ? new Date(baseIso + 'T00:00:00') : new Date();
+                    const depFormatted = `${days[dDate.getDay()]}, ${dDate.getDate()} ${months[dDate.getMonth()]}`;
 
-                    {/* Timeline Bar with +1 Day Indicator */}
-                    <div className="flex-1 px-4">
-                      <span className="text-xs font-bold text-slate-500 block mb-1">{train.duration}</span>
-                      <div className="relative flex items-center justify-center w-full">
-                        <div className="w-full h-0.5 bg-[#3f51b5]"></div>
-                        <div className="w-2 h-2 rounded-full bg-[#3f51b5] absolute left-0"></div>
-                        <div className="w-2 h-2 rounded-full bg-[#3f51b5] absolute right-0"></div>
+                    let addDays = 0;
+                    if (train.departureTime && train.arrivalTime) {
+                      const [depH, depM] = train.departureTime.split(':').map(Number);
+                      const [arrH, arrM] = train.arrivalTime.split(':').map(Number);
+                      if (!isNaN(depH) && !isNaN(arrH) && (arrH * 60 + (arrM || 0) < depH * 60 + (depM || 0))) {
+                        addDays = 1;
+                      }
+                    }
+
+                    const aDate = new Date(dDate);
+                    aDate.setDate(aDate.getDate() + addDays);
+                    const arrFormatted = `${days[aDate.getDay()]}, ${aDate.getDate()} ${months[aDate.getMonth()]}`;
+
+                    return (
+                      <div className="lg:col-span-5 flex items-center justify-between text-center px-2 lg:px-4 lg:border-r lg:border-slate-200">
+                        {/* Departure */}
+                        <div className="text-left">
+                          <span className="text-2xl font-black text-slate-900 font-mono leading-none block">{train.departureTime}</span>
+                          <span className="text-xs font-bold text-slate-700 block mt-1">{depFormatted}</span>
+                          <span className="text-xs font-black text-slate-900 block mt-1.5 uppercase">{train.from}</span>
+                          <span className="text-[11px] text-slate-500 font-medium block truncate max-w-[120px]">{train.fromName}</span>
+                        </div>
+
+                        {/* Timeline Bar with Day Indicator */}
+                        <div className="flex-1 px-4">
+                          <span className="text-xs font-bold text-slate-500 block mb-1">{train.duration}</span>
+                          <div className="relative flex items-center justify-center w-full">
+                            <div className="w-full h-0.5 bg-[#3f51b5]"></div>
+                            <div className="w-2 h-2 rounded-full bg-[#3f51b5] absolute left-0"></div>
+                            <div className="w-2 h-2 rounded-full bg-[#3f51b5] absolute right-0"></div>
+                          </div>
+                          {addDays > 0 ? (
+                            <span className="text-xs font-extrabold text-[#991b1b] block mt-1.5">+{addDays} Day</span>
+                          ) : (
+                            <span className="text-xs font-bold text-slate-400 block mt-1.5">Same Day</span>
+                          )}
+                        </div>
+
+                        {/* Arrival */}
+                        <div className="text-right">
+                          <span className="text-2xl font-black text-slate-900 font-mono leading-none block">{train.arrivalTime}</span>
+                          <span className="text-xs font-bold text-slate-700 block mt-1">{arrFormatted}</span>
+                          <span className="text-xs font-black text-slate-900 block mt-1.5 uppercase">{train.to}</span>
+                          <span className="text-[11px] text-slate-500 font-medium block truncate max-w-[120px]">{train.toName}</span>
+                        </div>
                       </div>
-                      <span className="text-xs font-extrabold text-[#991b1b] block mt-1.5">+1 Day</span>
-                    </div>
-
-                    {/* Arrival */}
-                    <div className="text-right">
-                      <span className="text-2xl font-black text-slate-900 font-mono leading-none block">{train.arrivalTime}</span>
-                      <span className="text-xs font-bold text-slate-700 block mt-1">Thu, 23 Jul</span>
-                      <span className="text-xs font-black text-slate-900 block mt-1.5 uppercase">{train.to}</span>
-                      <span className="text-[11px] text-slate-500 font-medium block truncate max-w-[120px]">{train.toName}</span>
-                    </div>
-
-                  </div>
+                    );
+                  })()}
 
                   {/* Right Column: Days Running & Check Availability Button (Col 3) */}
                   <div className="lg:col-span-3 flex flex-col items-center lg:items-end justify-center gap-3 lg:pl-2">

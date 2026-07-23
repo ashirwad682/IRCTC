@@ -900,6 +900,7 @@ export default function App() {
           selectedClass={bookingRequestData?.selectedClass || { code: '3A', name: 'AC 3-Tier (3A)', price: 2150 }}
           selectedSeats={bookingRequestData?.seats || ['12']}
           quota={bookingRequestData?.quota || selectedQuota || 'GN'}
+          journeyDate={bookingRequestData?.journeyDate || selectedDate}
           onClose={() => setShowPassengerModal(false)}
           onProceedToPayment={handleProceedToPaymentGateway}
         />
