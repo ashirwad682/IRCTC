@@ -3,7 +3,7 @@ import { User, Users, Plus, Trash2, ArrowLeft, ChevronDown, Check, ShieldCheck, 
 import { getEffectiveSeatStatus } from '../services/seatInventoryService';
 import { API_BASE_URL, safeJsonParse } from '../config/api';
 
-export default function PassengerDetailsModal({ user, train, selectedClass, selectedSeats: initialSeats, quota: passedQuota, journeyDate: passedJourneyDate, onClose, onProceedToPayment }) {
+export default function PassengerDetailsModal({ user, train, selectedClass, selectedSeats: initialSeats, quota: passedQuota, journeyDate: passedJourneyDate, onClose, onProceedToPayment, onGoToProfile }) {
   const journeyDate = passedJourneyDate || train?.journeyDate || '';
 
   // Helpers to dynamically mask email and mobile for logged-in user profile
@@ -493,7 +493,7 @@ export default function PassengerDetailsModal({ user, train, selectedClass, sele
               ← Go Back
             </button>
             <button
-              onClick={onClose}
+              onClick={onGoToProfile || onClose}
               className="flex-1 px-4 py-2.5 bg-[#0026cd] text-white rounded-xl text-sm font-black hover:bg-blue-800 transition-colors cursor-pointer shadow-lg"
             >
               Update Profile

@@ -161,12 +161,33 @@ export default function App() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginNoticeMessage, setLoginNoticeMessage] = useState(null);
 
-  // Search parameters & state (Starts clean without pre-filled station data or date)
-  const [fromStation, setFromStation] = useState('');
-  const [toStation, setToStation] = useState('');
-  const [selectedDate, setSelectedDate] = useState('');
-  const [selectedQuota, setSelectedQuota] = useState('GN');
-  const [selectedClass, setSelectedClass] = useState('ALL');
+  // Search parameters — persisted in sessionStorage so they survive F5 / Cmd+R refresh
+  const [fromStation, setFromStation] = useState(() => {
+    try { return sessionStorage.getItem('railx_from_station') || ''; } catch (e) { return ''; }
+  });
+  const [toStation, setToStation] = useState(() => {
+    try { return sessionStorage.getItem('railx_to_station') || ''; } catch (e) { return ''; }
+  });
+  const [selectedDate, setSelectedDate] = useState(() => {
+    try { return sessionStorage.getItem('railx_selected_date') || ''; } catch (e) { return ''; }
+  });
+  const [selectedQuota, setSelectedQuota] = useState(() => {
+    try { return sessionStorage.getItem('railx_selected_quota') || 'GN'; } catch (e) { return 'GN'; }
+  });
+  const [selectedClass, setSelectedClass] = useState(() => {
+    try { return sessionStorage.getItem('railx_selected_class') || 'ALL'; } catch (e) { return 'ALL'; }
+  });
+
+  // Persist search params to sessionStorage whenever they change
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('railx_from_station', fromStation || '');
+      sessionStorage.setItem('railx_to_station', toStation || '');
+      sessionStorage.setItem('railx_selected_date', selectedDate || '');
+      sessionStorage.setItem('railx_selected_quota', selectedQuota || 'GN');
+      sessionStorage.setItem('railx_selected_class', selectedClass || 'ALL');
+    } catch (e) {}
+  }, [fromStation, toStation, selectedDate, selectedQuota, selectedClass]);
 
   // Route Confirmation Modal state
   const [confirmationTrain, setConfirmationTrain] = useState(null);
@@ -948,6 +969,11 @@ export default function App() {
           journeyDate={bookingRequestData?.journeyDate || selectedDate}
           onClose={() => setShowPassengerModal(false)}
           onProceedToPayment={handleProceedToPaymentGateway}
+          onGoToProfile={() => {
+            setShowPassengerModal(false);
+            setActiveTab('profile');
+            setProfileSubTab('profile');
+          }}
         />
       )}
 
