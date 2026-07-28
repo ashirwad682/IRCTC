@@ -35,11 +35,15 @@ export default function PassengerDetailsModal({ user, train, selectedClass, sele
     }
   })();
 
-  const rawUserEmail = currentUser?.email || (currentUser?.username ? `${currentUser.username}@irctc.gov.in` : '');
-  const rawUserMobile = currentUser?.phone || currentUser?.mobile || '';
+  // Only use real profile data — no auto-generated fallbacks
+  const rawUserEmail = currentUser?.email?.trim() || '';
+  const rawUserMobile = (currentUser?.phone || currentUser?.mobile || '').trim();
 
-  const displayMaskedEmail = maskEmail(rawUserEmail);
-  const displayMaskedMobile = maskMobile(rawUserMobile);
+  const displayMaskedEmail = rawUserEmail ? maskEmail(rawUserEmail) : null;
+  const displayMaskedMobile = rawUserMobile ? maskMobile(rawUserMobile) : null;
+
+  // Profile completeness gate — must have both email AND mobile to book
+  const profileIncomplete = !rawUserEmail || !rawUserMobile;
   // Dynamic Master List sourcing strictly scoped to active user profile
   const getInitialMasterList = () => {
     const savedUser = user || (() => {
@@ -441,6 +445,64 @@ export default function PassengerDetailsModal({ user, train, selectedClass, sele
       remainingSeatsAfterBooking
     });
   };
+
+  // --- PROFILE INCOMPLETE GATE ---
+  if (profileIncomplete) {
+    const missingItems = [];
+    if (!rawUserEmail) missingItems.push('Email Address');
+    if (!rawUserMobile) missingItems.push('Mobile Number');
+
+    return (
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full p-8 flex flex-col items-center text-center gap-5">
+          {/* Icon */}
+          <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center">
+            <AlertTriangle className="w-8 h-8 text-amber-500" />
+          </div>
+
+          {/* Heading */}
+          <div>
+            <h2 className="text-lg font-black text-slate-900 mb-1">Complete Your Profile First</h2>
+            <p className="text-sm text-slate-500 font-medium">
+              You need to complete your profile before booking a ticket. Please add the following missing details:
+            </p>
+          </div>
+
+          {/* Missing fields list */}
+          <div className="w-full space-y-2">
+            {missingItems.map((item) => (
+              <div key={item} className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm">
+                <span className="text-red-500 text-base">✗</span>
+                <span className="font-bold text-red-700">{item}</span>
+                <span className="text-red-500 text-xs font-medium ml-auto">Missing</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Info note */}
+          <p className="text-xs text-slate-400 font-medium">
+            Go to <span className="font-bold text-[#0026cd]">My Profile → Account Details</span> to update your contact information.
+          </p>
+
+          {/* Actions */}
+          <div className="flex items-center gap-3 w-full">
+            <button
+              onClick={onClose}
+              className="flex-1 px-4 py-2.5 border border-slate-300 text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors cursor-pointer"
+            >
+              ← Go Back
+            </button>
+            <button
+              onClick={onClose}
+              className="flex-1 px-4 py-2.5 bg-[#0026cd] text-white rounded-xl text-sm font-black hover:bg-blue-800 transition-colors cursor-pointer shadow-lg"
+            >
+              Update Profile
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex flex-col min-h-screen">

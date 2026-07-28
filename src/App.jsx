@@ -30,11 +30,21 @@ export default function App() {
   // Page Session State Persistence (Restores exact tab & page view after Cmd+R or F5 hard refresh!)
   const [activeTab, setActiveTab] = useState(() => {
     try {
+      // Priority 1: URL pathname (for direct URL visits)
+      const path = window.location.pathname.toLowerCase();
+      if (path.includes('pnr')) return 'pnr';
+      if (path.includes('schedule')) return 'schedule';
+      if (path.includes('cancel')) return 'cancel-ticket';
+      if (path.includes('booked-tickets') || path.includes('history')) return 'booked-tickets';
+      if (path.includes('live')) return 'live';
+      if (path.includes('profile')) return 'profile';
+      if (path.includes('meal') || path.includes('food')) return 'search'; // fallback for modal pages
+      if (path.includes('train') || path.includes('result')) return 'search';
+      // Priority 2: hash fragment
       const hash = window.location.hash.replace('#', '');
-      if (['search', 'pnr', 'schedule', 'cancel-ticket', 'booked-tickets', 'profile', 'live', 'meals'].includes(hash)) {
-        return hash;
-      }
-      return localStorage.getItem('railx_active_tab') || 'search';
+      if (['search', 'pnr', 'schedule', 'cancel-ticket', 'booked-tickets', 'profile', 'live', 'meals'].includes(hash)) return hash;
+      // Priority 3: sessionStorage (refresh persistence)
+      return sessionStorage.getItem('railx_active_tab') || localStorage.getItem('railx_active_tab') || 'search';
     } catch (e) {
       return 'search';
     }
@@ -42,9 +52,11 @@ export default function App() {
 
   const [viewMode, setViewMode] = useState(() => {
     try {
+      const path = window.location.pathname.toLowerCase();
+      if (path.includes('train') || path.includes('result')) return 'results';
       const hash = window.location.hash.replace('#', '');
       if (hash === 'results') return 'results';
-      return localStorage.getItem('railx_view_mode') || 'search';
+      return sessionStorage.getItem('railx_view_mode') || localStorage.getItem('railx_view_mode') || 'search';
     } catch (e) {
       return 'search';
     }
@@ -92,12 +104,15 @@ export default function App() {
     }
   });
 
-  // Synchronize activeTab, viewMode, and profileSubTab to localStorage & URL hash so refresh stays on current page!
+  // Synchronize activeTab, viewMode, and profileSubTab to localStorage, sessionStorage & URL so refresh stays on current page
   useEffect(() => {
     try {
       localStorage.setItem('railx_active_tab', activeTab);
       localStorage.setItem('railx_view_mode', viewMode);
       localStorage.setItem('railx_profile_subtab', profileSubTab);
+      // sessionStorage: survives refresh but clears on new tab — perfect for page persistence
+      sessionStorage.setItem('railx_active_tab', activeTab);
+      sessionStorage.setItem('railx_view_mode', viewMode);
 
       let currentHash = activeTab;
       if (activeTab === 'search') {
@@ -172,7 +187,7 @@ export default function App() {
   const [activeTrackTrain, setActiveTrackTrain] = useState(null);
   const [confirmedBooking, setConfirmedBooking] = useState(null);
 
-  // Full SPA URL Routing Synchronization
+  // Full SPA URL Routing Synchronization (use replaceState so Back button works naturally)
   useEffect(() => {
     document.documentElement.classList.remove('dark');
 
@@ -192,6 +207,8 @@ export default function App() {
         path = '/schedule';
       } else if (activeTab === 'cancel-ticket') {
         path = '/cancel-ticket';
+      } else if (activeTab === 'booked-tickets') {
+        path = '/booked-tickets';
       } else if (activeTab === 'live') {
         path = '/live';
       } else if (activeTab === 'search' && viewMode === 'results') {
@@ -201,14 +218,15 @@ export default function App() {
       }
 
       if (window.location.pathname !== path) {
-        window.history.pushState(null, '', path);
+        window.history.replaceState(null, '', path);
       }
     };
 
     updateUrlFromState();
   }, [activeTab, viewMode, showFeedbackModal, showFoodModal, showLoginModal]);
 
-  // Handle browser direct URL visits and Back/Forward buttons (popstate)
+  // Handle browser Back/Forward buttons (popstate) — do NOT run syncStateFromUrl on mount
+  // (mount state is already set by useState initializer reading the URL)
   useEffect(() => {
     const syncStateFromUrl = () => {
       const path = window.location.pathname.toLowerCase();
@@ -222,7 +240,6 @@ export default function App() {
         setActiveTab('booked-tickets');
       } else if (path.includes('live')) {
         setActiveTab('live');
-
       } else if (path.includes('profile')) {
         setActiveTab('profile');
       } else if (path.includes('train') || path.includes('result') || path.includes('search-list')) {
@@ -234,15 +251,15 @@ export default function App() {
         setShowFeedbackModal(true);
       } else if (path.includes('login')) {
         setShowLoginModal(true);
-        setActiveTab('search');
-        setViewMode('search');
-      } else {
-        setActiveTab('search');
-        setViewMode('search');
+      } else if (path === '/' || path === '') {
+        // On root path, restore from sessionStorage instead of resetting to home
+        const savedTab = sessionStorage.getItem('railx_active_tab');
+        const savedView = sessionStorage.getItem('railx_view_mode');
+        if (savedTab) setActiveTab(savedTab);
+        if (savedView) setViewMode(savedView);
       }
     };
 
-    syncStateFromUrl();
     window.addEventListener('popstate', syncStateFromUrl);
     return () => window.removeEventListener('popstate', syncStateFromUrl);
   }, []);
