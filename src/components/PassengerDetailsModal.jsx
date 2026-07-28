@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { User, Plus, Trash2, ArrowLeft, ChevronDown, Check, ShieldCheck, Info, MapPin, Train, Clock, X, Calendar, CheckCircle2, Lock, Edit2, AlertTriangle, CreditCard } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, Users, Plus, Trash2, ArrowLeft, ChevronDown, Check, ShieldCheck, Info, MapPin, Train, Clock, X, Calendar, CheckCircle2, Lock, Edit2, AlertTriangle, CreditCard } from 'lucide-react';
 import { getEffectiveSeatStatus } from '../services/seatInventoryService';
+import { API_BASE_URL } from '../config/api';
 
-export default function PassengerDetailsModal({ train, selectedClass, selectedSeats: initialSeats, quota: passedQuota, journeyDate: passedJourneyDate, onClose, onProceedToPayment }) {
+export default function PassengerDetailsModal({ user, train, selectedClass, selectedSeats: initialSeats, quota: passedQuota, journeyDate: passedJourneyDate, onClose, onProceedToPayment }) {
   const journeyDate = passedJourneyDate || train?.journeyDate || '';
   // Dynamic Master List sourcing from localStorage or default master list
   const getInitialMasterList = () => {
@@ -38,8 +39,73 @@ export default function PassengerDetailsModal({ train, selectedClass, selectedSe
 
   const [masterPassengersList, setMasterPassengersList] = useState(getInitialMasterList);
 
+  // Sourcing User's Master Passengers directly from MongoDB Atlas Database
+  useEffect(() => {
+    const savedUser = user || (() => {
+      try {
+        const u = localStorage.getItem('railx_current_user');
+        return u ? JSON.parse(u) : null;
+      } catch (e) {
+        return null;
+      }
+    })();
+
+    const activeUsername = savedUser?.username || 'ashirwad';
+    fetch(`${API_BASE_URL}/api/master-passengers/${activeUsername}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success && Array.isArray(data.passengers) && data.passengers.length > 0) {
+          const mapped = data.passengers.map((mp, idx) => ({
+            id: mp.id || `m_${idx}`,
+            name: mp.name?.toUpperCase() || 'PASSENGER',
+            age: mp.age || 25,
+            dob: mp.dob || '',
+            gender: mp.gender || 'Male',
+            nationality: 'IN',
+            berth: mp.berth || 'No preference',
+            food: mp.meal?.toUpperCase().includes('VEG') ? 'VEG' : (mp.meal || 'NO_FOOD'),
+            idType: mp.idType || 'AADHAR ID/VIRTUAL ID',
+            idNumber: mp.idNumber || '',
+            verified: mp.status === 'Verified'
+          }));
+          setMasterPassengersList(mapped);
+        }
+      })
+      .catch(err => console.warn('MongoDB Master list fetch notice:', err));
+  }, [user?.username]);
+
   const refreshMasterList = () => {
-    setMasterPassengersList(getInitialMasterList());
+    const savedUser = user || (() => {
+      try {
+        const u = localStorage.getItem('railx_current_user');
+        return u ? JSON.parse(u) : null;
+      } catch (e) {
+        return null;
+      }
+    })();
+
+    const activeUsername = savedUser?.username || 'ashirwad';
+    fetch(`${API_BASE_URL}/api/master-passengers/${activeUsername}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success && Array.isArray(data.passengers) && data.passengers.length > 0) {
+          const mapped = data.passengers.map((mp, idx) => ({
+            id: mp.id || `m_${idx}`,
+            name: mp.name?.toUpperCase() || 'PASSENGER',
+            age: mp.age || 25,
+            dob: mp.dob || '',
+            gender: mp.gender || 'Male',
+            nationality: 'IN',
+            berth: mp.berth || 'No preference',
+            food: mp.meal?.toUpperCase().includes('VEG') ? 'VEG' : (mp.meal || 'NO_FOOD'),
+            idType: mp.idType || 'AADHAR ID/VIRTUAL ID',
+            idNumber: mp.idNumber || '',
+            verified: mp.status === 'Verified'
+          }));
+          setMasterPassengersList(mapped);
+        }
+      })
+      .catch(() => {});
   };
 
   // Workflow step: 'input' (Step 1) vs 'review' (Step 2: Non-editable Fare & Seat Review)
@@ -464,20 +530,60 @@ export default function PassengerDetailsModal({ train, selectedClass, selectedSe
                       </div>
                     )}
 
-                    {/* Master List Autofill Helper */}
-                    <div className="flex items-center justify-between bg-blue-50/70 p-2.5 rounded-xl border border-blue-100 text-xs">
-                      <span className="text-slate-700 font-medium">Want to fill pre-saved family members instantly?</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          refreshMasterList();
-                          setShowExistingPassengerModal(true);
-                        }}
-                        className="text-[#0026cd] font-extrabold hover:underline cursor-pointer"
-                      >
-                        ✨ Select Master Passenger List
-                      </button>
-                    </div>
+                    {/* Quick Fill from Master List Chips Sourced from MongoDB */}
+                    {masterPassengersList.length > 0 && (
+                      <div className="bg-[#f0f4ff] p-3 rounded-2xl border border-blue-200 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-black text-[#000066] uppercase tracking-wider flex items-center gap-1.5">
+                            <Users className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                            <span>Quick Select from Saved Master List (MongoDB Atlas)</span>
+                          </span>
+                          <span className="text-[10px] font-extrabold text-blue-900 bg-blue-100 px-2 py-0.5 rounded-full">{masterPassengersList.length} Saved</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {masterPassengersList.map((mp) => (
+                            <button
+                              key={mp.id}
+                              type="button"
+                              onClick={() => {
+                                setPassengers(prev => {
+                                  const emptyIdx = prev.findIndex(p => !p.name);
+                                  if (emptyIdx !== -1) {
+                                    const updated = [...prev];
+                                    updated[emptyIdx] = {
+                                      ...updated[emptyIdx],
+                                      name: mp.name,
+                                      age: String(mp.age),
+                                      gender: mp.gender,
+                                      berth: mp.berth,
+                                      food: mp.food
+                                    };
+                                    return updated;
+                                  } else if (prev.length < 6) {
+                                    return [
+                                      ...prev,
+                                      {
+                                        id: Date.now(),
+                                        name: mp.name,
+                                        age: String(mp.age),
+                                        gender: mp.gender,
+                                        berth: mp.berth,
+                                        food: mp.food
+                                      }
+                                    ];
+                                  }
+                                  return prev;
+                                });
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-white border border-blue-300 hover:border-blue-600 hover:bg-blue-50 text-xs font-bold text-slate-800 flex items-center gap-1.5 shadow-2xs cursor-pointer transition-all active:scale-95"
+                            >
+                              <span className="font-extrabold text-[#0026cd]">+ {mp.name}</span>
+                              <span className="text-[10px] text-slate-500 font-semibold">({mp.age}y / {mp.gender})</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {passengers.map((p, idx) => (
                       <div key={p.id} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3 relative group">

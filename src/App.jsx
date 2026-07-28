@@ -125,6 +125,24 @@ export default function App() {
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
+
+  // Fetch logged-in user's ticket bookings directly from MongoDB Atlas Database
+  useEffect(() => {
+    if (currentUser?.username) {
+      const cleanUser = String(currentUser.username).toLowerCase();
+      fetch(`${API_BASE_URL}/api/bookings/user/${encodeURIComponent(currentUser.username)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.success && Array.isArray(data.bookings)) {
+            const ownBookings = data.bookings.filter(b =>
+              b.username && String(b.username).toLowerCase() === cleanUser
+            );
+            setUserBookings(ownBookings);
+          }
+        })
+        .catch(err => console.warn('Fetch user bookings from MongoDB Atlas notice:', err));
+    }
+  }, [currentUser?.username, activeTab]);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginNoticeMessage, setLoginNoticeMessage] = useState(null);
 
@@ -828,6 +846,12 @@ export default function App() {
               setShowTicketModal(true);
             }}
             userBookings={userBookings}
+            onUpdateUser={(updatedUser) => {
+              setCurrentUser(updatedUser);
+              try {
+                localStorage.setItem('railx_current_user', JSON.stringify(updatedUser));
+              } catch (e) {}
+            }}
           />
         )}
 
@@ -899,6 +923,7 @@ export default function App() {
       {/* Passenger Details & Integrated Seat Selector Page */}
       {showPassengerModal && (
         <PassengerDetailsModal
+          user={currentUser}
           train={bookingRequestData?.train || {}}
           selectedClass={bookingRequestData?.selectedClass || { code: '3A', name: 'AC 3-Tier (3A)', price: 2150 }}
           selectedSeats={bookingRequestData?.seats || ['12']}

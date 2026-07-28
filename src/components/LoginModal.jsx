@@ -63,12 +63,23 @@ export default function LoginModal({ onClose, onLoginSuccess, bookingNotice }) {
         }
 
         onLoginSuccess({
+          id: data.user.id,
           name: data.user.fullName || data.user.username.toUpperCase(),
+          fullName: data.user.fullName,
           username: data.user.username,
           email: data.user.email || `${username}@irctc.gov.in`,
           phone: data.user.phone || '+91 98765 43210',
+          gender: data.user.gender,
+          dob: data.user.dob,
+          country: data.user.country,
+          address: data.user.address,
           irctcId: `IRCTC_${data.user.id ? String(data.user.id).slice(-6).toUpperCase() : '8849'}`,
           walletBalance: data.user.walletBalance != null ? data.user.walletBalance : 10000,
+          lastUsernameChangeAt: data.user.lastUsernameChangeAt,
+          lastPasswordChangeAt: data.user.lastPasswordChangeAt,
+          passAgeDays: data.user.passAgeDays,
+          isPasswordExpired: data.user.isPasswordExpired,
+          daysUntilNextUsernameChange: data.user.daysUntilNextUsernameChange,
           loyaltyPoints: 1250,
           isKycVerified: true
         });
@@ -168,7 +179,7 @@ export default function LoginModal({ onClose, onLoginSuccess, bookingNotice }) {
           localStorage.setItem('railx_registered_users', JSON.stringify(localReg));
         }
 
-        setSuccessMsg(`🎉 Account created and saved to MongoDB Database! You can now Sign In with User ID: "${cleanUsername}"`);
+        setSuccessMsg(`🎉 Account created successfully! You can now Sign In with User ID: "${cleanUsername}"`);
         setUsername(cleanUsername);
         setPassword('');
         setActiveTab('signin');
@@ -193,7 +204,7 @@ export default function LoginModal({ onClose, onLoginSuccess, bookingNotice }) {
 
     localReg.push(newUserObj);
     localStorage.setItem('railx_registered_users', JSON.stringify(localReg));
-    setSuccessMsg(`🎉 Account created and saved to User Database! You can now Sign In with User ID: "${cleanUsername}"`);
+    setSuccessMsg(`🎉 Account created successfully! You can now Sign In with User ID: "${cleanUsername}"`);
     setUsername(cleanUsername);
     setPassword('');
     setActiveTab('signin');

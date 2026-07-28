@@ -1381,7 +1381,7 @@ export default function Navbar({
                           Aadhaar KYC Verified ✓
                         </span>
                         <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-blue-100 text-[#283593] whitespace-nowrap">
-                          ₹4,250 Wallet
+                          ₹{Math.max(0, currentUser?.walletBalance ?? 10000).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Wallet
                         </span>
                       </div>
                     </div>
@@ -1643,7 +1643,7 @@ export default function Navbar({
 
             <button
               onClick={() => {
-                alert('IRCTC e-Wallet: Balance ₹4,250.00');
+                alert(`IRCTC e-Wallet: Balance ₹${Math.max(0, currentUser?.walletBalance ?? 10000).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
                 setMobileMenuOpen(false);
               }}
               className="p-2.5 rounded-xl bg-slate-50 text-slate-800 flex items-center gap-2 cursor-pointer"

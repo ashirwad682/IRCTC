@@ -287,8 +287,9 @@ export default function BookedTicketHistoryPage({ onBack, onViewTicket, onCancel
     return { status, coach, seat, type, typeName: typeNames[type] || type };
   };
 
-  // Dynamic user account bookings dataset
-  const bookingsData = userBookings.map(b => {
+  // Dynamic user account bookings dataset (prioritize database-fetched localUserBookings, fallback to userBookings prop)
+  const displayBookings = (localUserBookings && localUserBookings.length > 0) ? localUserBookings : userBookings;
+  const bookingsData = (displayBookings || []).map(b => {
     const classCode = b.classCode || b.selectedClass || '3A';
     const isCancelled = b.status === 'CANCELLED' || b.isCancelled === true;
     return {

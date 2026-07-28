@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Search, ShieldCheck, Ticket, Calendar, Clock, MapPin, CheckCircle2, AlertTriangle, ArrowRight, Download, Share2, Utensils, RefreshCw, FileText, Sparkles } from 'lucide-react';
+import { Search, ShieldCheck, Ticket, Calendar, Clock, MapPin, CheckCircle2, AlertTriangle, ArrowRight, Share2, Utensils, RefreshCw, FileText, Sparkles } from 'lucide-react';
 import { fetchOfficialIrctcPnrStatus } from '../services/irctcPnrService';
-import CancellationReceiptModal from './CancellationReceiptModal';
 
 export default function PnrStatusPage({ initialPnr = '', userBookings = [], onViewTicket, onCancelTicket, onOrderFood }) {
   const [pnrInput, setPnrInput] = useState(initialPnr || '');
@@ -9,7 +8,6 @@ export default function PnrStatusPage({ initialPnr = '', userBookings = [], onVi
   const [rawBookingRef, setRawBookingRef] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [showCancellationModal, setShowCancellationModal] = useState(false);
 
   React.useEffect(() => {
     if (initialPnr) {
@@ -161,17 +159,9 @@ export default function PnrStatusPage({ initialPnr = '', userBookings = [], onVi
                     </p>
                   </div>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowCancellationModal(true)}
-                  className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-md cursor-pointer shrink-0"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Download Cancellation Slip (PDF)</span>
-                </button>
               </div>
             )}
+
 
             {/* Train & Journey Route Details */}
             <div className="bg-[#eef4fc] p-6 rounded-2xl border border-slate-200 grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
@@ -294,16 +284,6 @@ export default function PnrStatusPage({ initialPnr = '', userBookings = [], onVi
                   <span>View / Print ERS Ticket</span>
                 </button>
 
-                {pnrResult.isCancelled && (
-                  <button
-                    type="button"
-                    onClick={() => setShowCancellationModal(true)}
-                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs shadow-xs flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Download Cancellation Slip (PDF)</span>
-                  </button>
-                )}
 
                 <button
                   onClick={() => alert(`PNR ${pnrResult.pnr} details sent via SMS & WhatsApp to registered mobile number!`)}
@@ -329,14 +309,6 @@ export default function PnrStatusPage({ initialPnr = '', userBookings = [], onVi
         )}
 
       </div>
-
-      {showCancellationModal && (
-        <CancellationReceiptModal
-          pnrData={rawBookingRef || pnrResult}
-          onClose={() => setShowCancellationModal(false)}
-        />
-      )}
-
     </div>
   );
 }

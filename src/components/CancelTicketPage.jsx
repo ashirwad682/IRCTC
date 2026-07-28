@@ -20,16 +20,32 @@ export default function CancelTicketPage({ userBookings = [], prefillPnr = null,
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [qrBase64, setQrBase64] = useState('');
   const [ticketFilter, setTicketFilter] = useState('ALL'); // 'ALL' | 'BOOKED' | 'CANCELLED'
+  const [dbUserBookings, setDbUserBookings] = useState(userBookings);
+
+  // Fetch logged-in user's ticket bookings directly from MongoDB Atlas Database
+  useEffect(() => {
+    if (currentUser?.username) {
+      fetch(`${API_BASE_URL}/api/bookings/user/${encodeURIComponent(currentUser.username)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.success && Array.isArray(data.bookings)) {
+            setDbUserBookings(data.bookings);
+          }
+        })
+        .catch(err => console.warn('Fetch user bookings in CancelTicketPage notice:', err));
+    }
+  }, [currentUser?.username]);
 
   // Auto-select ticket from user bookings on load or prefill
   useEffect(() => {
-    const targetPnr = prefillPnr || userBookings[0]?.pnr;
+    const activeList = dbUserBookings.length > 0 ? dbUserBookings : userBookings;
+    const targetPnr = prefillPnr || activeList[0]?.pnr;
     if (targetPnr) {
       setPnrInput(targetPnr);
       handleSearchPnr(targetPnr);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefillPnr, userBookings]);
+  }, [prefillPnr, dbUserBookings, userBookings]);
 
   // Generate 2D QR Code for Cancellation Slip
   useEffect(() => {
@@ -161,42 +177,75 @@ STATUS: CANCELLED / REFUND INITIATED`;
         (match.passengers && match.passengers.length > 0 && match.passengers.every(p => String(p.status || p.berth || '').toUpperCase().includes('CAN')));
 
       if (isTicketCancelled) {
-        // Auto-populate cancellationResult so the full E-Ticket Cancellation Slip, PDF Download, and Print buttons NEVER disable after refresh!
-        const cDetails = match.cancellationDetails || {};
-        const cancelId = cDetails.cancellationId || match.cancelId || ('CAN' + String(match.pnr || '92839191').slice(-6) + '91');
-        const psgList = match.passengers || [];
-        const totalFare = Number(
-          match.ticketFare ||
-          (match.totalPaid != null && match.convenienceFee != null
-            ? match.totalPaid - match.convenienceFee
-            : match.totalPaid || 1200)
-        );
-        const grossFare = cDetails.grossFare || totalFare;
-        const baseCancelCharge = cDetails.baseCancelCharge || (180 * Math.max(1, psgList.length));
-        const gstAmount = cDetails.gst18 || Math.round(baseCancelCharge * 0.18);
-        const totalDeduction = cDetails.totalDeduction || (baseCancelCharge + gstAmount);
-        const netRefund = cDetails.netRefund || Math.max(0, grossFare - totalDeduction);
-
-        setCancellationResult({
-          cancelId,
-          pnr: match.pnr,
-          trainName: match.trainName || 'MUMBAI TEJAS RAJDHANI EXP',
-          trainNumber: match.trainNumber || '12952',
-          cancelledDate: cDetails.cancelledAt
-            ? new Date(cDetails.cancelledAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-            : (match.cancelledDate || new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })),
-          cancelledPassengers: psgList,
-          refundInfo: {
-            grossFare,
-            baseCancelCharge,
-            gstAmount,
-            totalDeduction,
-            netRefund,
-            count: psgList.length
-          },
-          refundMode: 'Original Payment Source (Bank/UPI)',
-          refundEta: '2-3 Business Days'
-        });
+        // Fetch the exact stored cancellation record from MongoDB (cancelledDate, cancelledTime, netRefund saved at cancel time)
+        fetch(API_BASE_URL + '/api/cancellations/pnr/' + cleanPnr)
+          .then(r => r.json())
+          .then(data => {
+            const cRec = (data && data.success && data.cancellation) ? data.cancellation : null;
+            const cDetails = match.cancellationDetails || {};
+            const cancelId = cRec?.cancellationId || cDetails.cancellationId || ('CAN' + String(match.pnr || '').slice(-6) + '91');
+            const psgList = (cRec?.cancelledPassengers?.length ? cRec.cancelledPassengers : match.passengers) || [];
+            const grossFare = cRec?.grossFare ?? cDetails.grossFare ?? Number(match.ticketFare || match.totalPaid || 1200);
+            const baseCancelCharge = cRec?.baseCancelCharge ?? cDetails.baseCancelCharge ?? (180 * Math.max(1, psgList.length));
+            const cgst9 = cRec?.cgst9 ?? cDetails.cgst9 ?? Math.round(baseCancelCharge * 0.09 * 100) / 100;
+            const sgst9 = cRec?.sgst9 ?? cDetails.sgst9 ?? cgst9;
+            const gstAmount = cRec?.gst18 ?? cDetails.gst18 ?? (cgst9 + sgst9);
+            const totalDeduction = cRec?.totalDeduction ?? cDetails.totalDeduction ?? (baseCancelCharge + gstAmount);
+            const netRefund = cRec?.netRefund ?? cDetails.netRefund ?? Math.max(0, grossFare - totalDeduction);
+            const convenienceFee = cRec?.convenienceFee ?? cDetails.convenienceFee ?? match.convenienceFee ?? 35.40;
+            const insurancePremium = cRec?.insurancePremium ?? cDetails.insurancePremium ?? match.insurancePremium ?? 0.90;
+            const totalPaid = cRec?.totalPaid ?? cDetails.totalPaid ?? match.totalPaid ?? 0;
+            // Use stored IST-formatted timestamp — always prefer DB value
+            const cancelledDateIST = cRec?.cancelledDateIST || cDetails.cancelledDateIST || '';
+            const cancelledDate = cRec?.cancelledDate || cDetails.cancelledDate || '';
+            const cancelledTime = cRec?.cancelledTime || cDetails.cancelledTime || '';
+            const cancelledAt = cRec?.cancelledAt || cDetails.cancelledAt || '';
+            let displayDate = cancelledDateIST || cancelledDate;
+            if (!displayDate && cancelledAt) {
+              try { displayDate = new Date(cancelledAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }); }
+              catch(e) { displayDate = cancelledAt; }
+            }
+            if (!displayDate) displayDate = 'Date not available';
+            setCancellationResult({
+              cancelId, pnr: match.pnr,
+              trainName: match.trainName || cRec?.trainName || 'EXPRESS TRAIN',
+              trainNumber: match.trainNumber || cRec?.trainNumber || '',
+              cancelledDate: displayDate,
+              cancelledTime,
+              cancelledDateIST: cancelledDateIST || displayDate,
+              cancelledPassengers: psgList,
+              cancelReason: cRec?.cancelReason || cDetails.cancelReason || 'Change of Travel Plan',
+              refundInfo: { grossFare, baseCancelCharge, cgst9, sgst9, gstAmount, totalDeduction, netRefund, convenienceFee, insurancePremium, totalPaid, count: psgList.length },
+              refundMode: cRec?.refundMode || cDetails.refundMode || 'Original Payment Source (Bank/UPI)',
+              refundEta: cRec?.refundEta || cDetails.refundEta || '2-3 Business Days'
+            });
+          })
+          .catch(() => {
+            // Fallback: use data already present in booking record
+            const cDetails = match.cancellationDetails || {};
+            const cancelId = cDetails.cancellationId || ('CAN' + String(match.pnr || '').slice(-6) + '91');
+            const psgList = match.passengers || [];
+            const grossFare = cDetails.grossFare || Number(match.ticketFare || match.totalPaid || 1200);
+            const baseCancelCharge = cDetails.baseCancelCharge || (180 * Math.max(1, psgList.length));
+            const gstAmount = cDetails.gst18 || Math.round(baseCancelCharge * 0.18);
+            const totalDeduction = cDetails.totalDeduction || (baseCancelCharge + gstAmount);
+            const netRefund = cDetails.netRefund || Math.max(0, grossFare - totalDeduction);
+            const displayDate = cDetails.cancelledDateIST || cDetails.cancelledDate ||
+              (cDetails.cancelledAt ? new Date(cDetails.cancelledAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : 'Not Available');
+            setCancellationResult({
+              cancelId, pnr: match.pnr,
+              trainName: match.trainName || 'EXPRESS TRAIN',
+              trainNumber: match.trainNumber || '',
+              cancelledDate: displayDate,
+              cancelledTime: cDetails.cancelledTime || '',
+              cancelledDateIST: displayDate,
+              cancelledPassengers: psgList,
+              cancelReason: cDetails.cancelReason || 'Change of Travel Plan',
+              refundInfo: { grossFare, baseCancelCharge, gstAmount, totalDeduction, netRefund, count: psgList.length },
+              refundMode: cDetails.refundMode || 'Original Payment Source (Bank/UPI)',
+              refundEta: cDetails.refundEta || '2-3 Business Days'
+            });
+          });
       } else {
         // Active ticket: reset cancellationResult so passenger selection form displays
         setCancellationResult(null);
@@ -314,18 +363,51 @@ STATUS: CANCELLED / REFUND INITIATED`;
         refundInfo.count
       );
 
-      // Persist cancellation status into MongoDB Atlas Cloud Database
+      // Persist cancellation + date/time/refund into MongoDB Atlas Cloud Database
       try {
         fetch(`${API_BASE_URL}/api/bookings/cancel`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             pnr: searchedBooking.pnr,
-            username: currentUser?.username || 'ashirwad_irctc'
+            username: currentUser?.username || 'ashirwad_irctc',
+            cancelReason: cancelReason || 'Change of Travel Plan'
           })
-        }).catch(err => console.warn("MongoDB Cloud cancel error:", err));
+        })
+        .then(r => r.json())
+        .then(dbData => {
+          // Update cancellationResult with exact date/time/refund from MongoDB response
+          if (dbData && dbData.success && dbData.cancellation) {
+            const cd = dbData.cancellation;
+            const displayDate = cd.cancelledDateIST || cd.cancelledDate || result.cancelledDate;
+            setCancellationResult(prev => prev ? {
+              ...prev,
+              cancelId: cd.cancellationId || prev.cancelId,
+              cancelledDate: displayDate,
+              cancelledTime: cd.cancelledTime || prev.cancelledTime || '',
+              cancelledDateIST: cd.cancelledDateIST || displayDate,
+              cancelReason: cd.cancelReason || prev.cancelReason || 'Change of Travel Plan',
+              refundInfo: {
+                ...prev.refundInfo,
+                grossFare: cd.grossFare ?? prev.refundInfo?.grossFare,
+                baseCancelCharge: cd.baseCancelCharge ?? prev.refundInfo?.baseCancelCharge,
+                cgst9: cd.cgst9 ?? prev.refundInfo?.cgst9,
+                sgst9: cd.sgst9 ?? prev.refundInfo?.sgst9,
+                gstAmount: cd.gst18 ?? prev.refundInfo?.gstAmount,
+                totalDeduction: cd.totalDeduction ?? prev.refundInfo?.totalDeduction,
+                netRefund: cd.netRefund ?? prev.refundInfo?.netRefund,
+                convenienceFee: cd.convenienceFee ?? prev.refundInfo?.convenienceFee,
+                insurancePremium: cd.insurancePremium ?? prev.refundInfo?.insurancePremium,
+                totalPaid: cd.totalPaid ?? prev.refundInfo?.totalPaid
+              },
+              refundMode: cd.refundMode || prev.refundMode || 'Original Payment Source (Bank/UPI)',
+              refundEta: cd.refundEta || prev.refundEta || '2-3 Business Days'
+            } : prev);
+          }
+        })
+        .catch(err => console.warn('MongoDB Cloud cancel error:', err));
       } catch (e) {
-        console.warn("MongoDB Atlas cancellation sync notice:", e);
+        console.warn('MongoDB Atlas cancellation sync notice:', e);
       }
 
       // Persist cancellation status into localStorage
@@ -898,8 +980,13 @@ STATUS: CANCELLED / REFUND INITIATED`;
                   <span className="font-mono font-black text-slate-900">{cancellationResult.cancelId}</span>
                 </div>
                 <div>
-                  <span className="font-bold text-slate-600 block">DATE & TIME OF CANCELLATION:</span>
-                  <span className="font-bold text-slate-900">{cancellationResult.cancelledDate}</span>
+                  <span className="font-bold text-slate-600 block">CANCELLATION DATE:</span>
+                  <span className="font-bold text-slate-900 block">{cancellationResult.cancelledDateIST || cancellationResult.cancelledDate}</span>
+                  {cancellationResult.cancelledTime && (<span className="font-mono text-xs text-slate-600">Time: {cancellationResult.cancelledTime} IST</span>)}
+                </div>
+                <div>
+                  <span className="font-bold text-slate-600 block">CANCEL REASON:</span>
+                  <span className="font-bold text-slate-800 text-[11px]">{cancellationResult.cancelReason || 'Change of Travel Plan'}</span>
                 </div>
               </div>
 

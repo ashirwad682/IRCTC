@@ -35,13 +35,29 @@ const bookingSchema = new mongoose.Schema({
   bookingDate: { type: String, default: () => new Date().toISOString() },
   isCancelled: { type: Boolean, default: false },
   cancellationDetails: {
-    cancellationId: String,
-    cancelledAt: String,
-    grossFare: Number,
+    cancellationId:   String,
+    // Full timestamps — easy to display without extra parsing
+    cancelledAt:      String,   // ISO string e.g. "2026-07-28T13:13:33.000Z"
+    cancelledDate:    String,   // "28-Jul-2026"
+    cancelledTime:    String,   // "18:43:33"
+    cancelledDateIST: String,   // "28 Jul 2026, 06:43 PM"
+    // Full fare breakdown
+    ticketFare:       Number,
+    convenienceFee:   Number,
+    insurancePremium: Number,
+    totalPaid:        Number,
+    grossFare:        Number,
     baseCancelCharge: Number,
-    gst18: Number,
-    totalDeduction: Number,
-    netRefund: Number
+    cgst9:            Number,
+    sgst9:            Number,
+    gst18:            Number,
+    totalDeduction:   Number,
+    netRefund:        Number,
+    // Cancel context
+    cancelReason:     String,
+    passengerCount:   Number,
+    refundMode:       String,
+    refundEta:        String
   }
 }, { timestamps: true });
 

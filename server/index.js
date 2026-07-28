@@ -42,8 +42,8 @@ export const connectDB = async () => {
 
   try {
     cachedConn = mongoose.connect(MONGO_URI, {
-      serverSelectionTimeoutMS: 8000,
-      connectTimeoutMS: 10000,
+      serverSelectionTimeoutMS: 15000,
+      connectTimeoutMS: 15000,
     });
     await cachedConn;
     console.log('✅ Connected to Primary Production MongoDB Database [irctc_db]');
@@ -59,7 +59,8 @@ export const connectDB = async () => {
       console.log('✅ Connected to Fallback Local MongoDB Database [irctc_db]');
       return mongoose.connection;
     } catch (localErr) {
-      console.error('❌ MongoDB Connection Error:', localErr.message);
+      console.error('❌ MongoDB Connection Warning:', localErr.message);
+      cachedConn = null;
       throw localErr;
     }
   }
@@ -67,7 +68,11 @@ export const connectDB = async () => {
 
 // Database Connection Middleware for all incoming API routes
 app.use(async (req, res, next) => {
-  await connectDB();
+  try {
+    await connectDB();
+  } catch (err) {
+    console.warn('⚠️ Database connection warning during request processing:', err.message);
+  }
   next();
 });
 
@@ -97,6 +102,18 @@ app.get('/api/health', (req, res) => {
   const dbState = mongoose.connection.readyState === 1 ? 'CONNECTED' : 'DISCONNECTED';
   res.json({ status: 'UP', database: dbState, timestamp: new Date() });
 });
+// Admin: Fix negative/inflated wallet balances (one-time fix after duplicate-cancel-route bug)
+app.post('/api/admin/fix-wallets', async (req, res) => {
+  try {
+    const neg = await User.updateMany({ walletBalance: { $lt: 0 } }, { $set: { walletBalance: 10000 } });
+    const inf = await User.updateMany({ walletBalance: { $gt: 50000 } }, { $set: { walletBalance: 10000 } });
+    res.json({ success: true, negativeFixed: neg.modifiedCount, inflatedFixed: inf.modifiedCount, message: 'Wallet balances fixed' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+
 
 // ==========================================
 // 1. USER ACCOUNT AUTHENTICATION & PROFILE APIs
@@ -131,7 +148,9 @@ app.post('/api/auth/register', async (req, res) => {
       password: password,
       fullName: fullName || username,
       phone: phone || '',
-      walletBalance: 10000
+      walletBalance: 10000,
+      lastUsernameChangeAt: new Date(),
+      lastPasswordChangeAt: new Date()
     });
 
     await newUser.save();
@@ -139,14 +158,23 @@ app.post('/api/auth/register', async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Account created and saved to MongoDB Database',
+      message: 'Account created successfully',
       user: {
         id: newUser._id,
         username: newUser.username,
         email: newUser.email,
         fullName: newUser.fullName,
         phone: newUser.phone,
-        walletBalance: newUser.walletBalance
+        gender: newUser.gender || '',
+        dob: newUser.dob || '',
+        country: newUser.country || 'India',
+        address: newUser.address || '',
+        walletBalance: newUser.walletBalance,
+        lastUsernameChangeAt: newUser.lastUsernameChangeAt,
+        lastPasswordChangeAt: newUser.lastPasswordChangeAt,
+        passAgeDays: 0,
+        isPasswordExpired: false,
+        daysUntilNextUsernameChange: 90
       }
     });
   } catch (err) {
@@ -163,11 +191,16 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ success: false, message: 'User ID and Password are required' });
     }
 
-    const cleanUsername = String(username).toLowerCase().trim();
+    const cleanIdentifier = String(username).toLowerCase().trim();
+    const cleanPhoneDigits = cleanIdentifier.replace(/\D/g, '');
+
     let user = await User.findOne({
       $or: [
-        { username: cleanUsername },
-        { username: new RegExp(`^${cleanUsername}$`, 'i') }
+        { username: cleanIdentifier },
+        { email: cleanIdentifier },
+        { phone: cleanIdentifier },
+        { username: new RegExp(`^${cleanIdentifier}$`, 'i') },
+        ...(cleanPhoneDigits.length >= 10 ? [{ phone: new RegExp(cleanPhoneDigits.slice(-10)) }] : [])
       ]
     });
 
@@ -187,16 +220,38 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
 
+    // Password Age & 30-Day Expiry Check
+    const lastPassDate = user.lastPasswordChangeAt ? new Date(user.lastPasswordChangeAt) : new Date(user.createdAt || Date.now());
+    const passAgeDays = Math.floor((Date.now() - lastPassDate.getTime()) / (1000 * 60 * 60 * 24));
+    const isPasswordExpired = passAgeDays >= 30;
+
+    // Username 90-Day (3 Months) Change Cooldown Check
+    const lastUserChangeDate = user.lastUsernameChangeAt ? new Date(user.lastUsernameChangeAt) : new Date(user.createdAt || Date.now());
+    const usernameAgeDays = Math.floor((Date.now() - lastUserChangeDate.getTime()) / (1000 * 60 * 60 * 24));
+    const daysUntilNextUsernameChange = Math.max(0, 90 - usernameAgeDays);
+
     res.json({
       success: true,
-      message: 'Logged in successfully from MongoDB Database',
+      message: isPasswordExpired
+        ? '🔒 Notice: Your password is older than 30 days and has EXPIRED. Please change your password to continue.'
+        : 'Logged in successfully',
+      isPasswordExpired,
       user: {
         id: user._id,
         username: user.username,
         email: user.email,
         fullName: user.fullName || user.username,
         phone: user.phone || '',
-        walletBalance: user.walletBalance
+        gender: user.gender || '',
+        dob: user.dob || '',
+        country: user.country || 'India',
+        address: user.address || '',
+        walletBalance: user.walletBalance,
+        lastUsernameChangeAt: user.lastUsernameChangeAt || user.createdAt,
+        lastPasswordChangeAt: user.lastPasswordChangeAt || user.createdAt,
+        passAgeDays,
+        isPasswordExpired,
+        daysUntilNextUsernameChange
       }
     });
   } catch (err) {
@@ -205,21 +260,404 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// Update User Profile API in MongoDB
+app.put('/api/auth/profile/update', async (req, res) => {
+  try {
+    const { username, newUsername, fullName, gender, dob, phone, country, address } = req.body;
+    if (!username) {
+      return res.status(400).json({ success: false, message: 'Username is required' });
+    }
+
+    const cleanUsername = String(username).toLowerCase().trim();
+    const user = await User.findOne({
+      $or: [
+        { username: cleanUsername },
+        { username: new RegExp(`^${cleanUsername}$`, 'i') }
+      ]
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User account not found in database' });
+    }
+
+    // Username Change Request with 90-Day (3 Months) Cooldown Rule
+    if (newUsername && String(newUsername).toLowerCase().trim() !== user.username) {
+      const cleanNewUsername = String(newUsername).toLowerCase().trim();
+      const lastUserChangeDate = user.lastUsernameChangeAt ? new Date(user.lastUsernameChangeAt) : new Date(user.createdAt || Date.now());
+      const usernameAgeDays = Math.floor((Date.now() - lastUserChangeDate.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (usernameAgeDays < 90) {
+        const remainingDays = 90 - usernameAgeDays;
+        return res.status(400).json({
+          success: false,
+          message: `🚫 Username cannot be changed more than once every 90 days (3 months). You must wait ${remainingDays} more day(s) before changing your username.`
+        });
+      }
+
+      // Check if new username is taken
+      const existingUser = await User.findOne({ username: cleanNewUsername });
+      if (existingUser) {
+        return res.status(400).json({ success: false, message: 'Requested User ID is already taken by another user' });
+      }
+
+      user.username = cleanNewUsername;
+      user.lastUsernameChangeAt = new Date();
+    }
+
+    if (fullName !== undefined) user.fullName = fullName;
+    if (gender !== undefined) user.gender = gender;
+    if (dob !== undefined) user.dob = dob;
+    if (phone !== undefined) user.phone = phone;
+    if (country !== undefined) user.country = country;
+    if (address !== undefined) user.address = address;
+
+    await user.save();
+    console.log(`[MongoDB Atlas] User profile updated in database for: ${user.username}`);
+
+    const lastPassDate = user.lastPasswordChangeAt ? new Date(user.lastPasswordChangeAt) : new Date(user.createdAt || Date.now());
+    const passAgeDays = Math.floor((Date.now() - lastPassDate.getTime()) / (1000 * 60 * 60 * 24));
+    const lastUserChangeDate = user.lastUsernameChangeAt ? new Date(user.lastUsernameChangeAt) : new Date(user.createdAt || Date.now());
+    const usernameAgeDays = Math.floor((Date.now() - lastUserChangeDate.getTime()) / (1000 * 60 * 60 * 24));
+    const daysUntilNextUsernameChange = Math.max(0, 90 - usernameAgeDays);
+
+    res.json({
+      success: true,
+      message: 'Profile details saved successfully',
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        fullName: user.fullName,
+        phone: user.phone,
+        gender: user.gender,
+        dob: user.dob,
+        country: user.country,
+        address: user.address,
+        walletBalance: user.walletBalance,
+        lastUsernameChangeAt: user.lastUsernameChangeAt,
+        lastPasswordChangeAt: user.lastPasswordChangeAt,
+        passAgeDays,
+        isPasswordExpired: passAgeDays >= 30,
+        daysUntilNextUsernameChange
+      }
+    });
+  } catch (err) {
+    console.error('Update profile error:', err);
+    res.status(500).json({ success: false, message: 'Database error updating profile details' });
+  }
+});
+
+// Change User Password API in MongoDB Database (Resets 30-day expiration timer!)
+app.put('/api/auth/change-password', async (req, res) => {
+  try {
+    const { username, oldPassword, newPassword } = req.body;
+    if (!username || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Username and New Password are required' });
+    }
+
+    const cleanUsername = String(username).toLowerCase().trim();
+    const user = await User.findOne({
+      $or: [
+        { username: cleanUsername },
+        { username: new RegExp(`^${cleanUsername}$`, 'i') }
+      ]
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User account not found in database' });
+    }
+
+    // Verify current/old password if provided
+    if (oldPassword && user.password !== oldPassword) {
+      return res.status(400).json({ success: false, message: 'Current / Old Password is incorrect' });
+    }
+
+    user.password = newPassword;
+    user.lastPasswordChangeAt = new Date();
+    await user.save();
+    console.log(`[MongoDB Atlas] Password updated and 30-day timer reset in database for user: ${cleanUsername}`);
+
+    res.json({
+      success: true,
+      message: '🎉 Password updated successfully! Your 30-day password expiration timer has been reset.',
+      lastPasswordChangeAt: user.lastPasswordChangeAt,
+      passAgeDays: 0,
+      isPasswordExpired: false
+    });
+  } catch (err) {
+    console.error('Change password error:', err);
+    res.status(500).json({ success: false, message: 'Database error updating password' });
+  }
+});
+
+// Fetch Master List Passengers for User from MongoDB Database
+app.get('/api/master-passengers/:username', async (req, res) => {
+  try {
+    const { username } = req.params;
+    const cleanUsername = String(username).toLowerCase().trim();
+    const user = await User.findOne({
+      $or: [
+        { username: cleanUsername },
+        { username: new RegExp(`^${cleanUsername}$`, 'i') }
+      ]
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User account not found' });
+    }
+
+    res.json({
+      success: true,
+      passengers: user.masterPassengers || []
+    });
+  } catch (err) {
+    console.error('Fetch master passengers error:', err);
+    res.status(500).json({ success: false, message: 'Database error fetching master list' });
+  }
+});
+
+// Add Master List Passenger for User in MongoDB Database (Max 6 Limit & Duplicate Check)
+app.post('/api/master-passengers/add', async (req, res) => {
+  try {
+    const { username, passengerType, name, dob, gender, berth, meal, idType, idNumber } = req.body;
+    if (!username || !name) {
+      return res.status(400).json({ success: false, message: 'Username and Name are required' });
+    }
+
+    const cleanUsername = String(username).toLowerCase().trim();
+    const user = await User.findOne({
+      $or: [
+        { username: cleanUsername },
+        { username: new RegExp(`^${cleanUsername}$`, 'i') }
+      ]
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User account not found' });
+    }
+
+    // Enforce 6 Passengers Limit Rule
+    if (user.masterPassengers && user.masterPassengers.length >= 6) {
+      return res.status(400).json({
+        success: false,
+        message: '🚫 Maximum limit reached! Each user can only add up to 6 passengers to their Master List.'
+      });
+    }
+
+    const cleanName = String(name).toUpperCase().trim();
+    const cleanDob = String(dob || '').trim();
+    const cleanIdType = String(idType || 'AADHAR ID/VIRTUAL ID').toUpperCase().trim();
+    const cleanIdNumber = idNumber ? String(idNumber).toUpperCase().trim() : '';
+
+    // Duplicate Passenger Check (ALL 4 FIELDS MUST MATCH: Name + DOB + ID Card Type + ID Card No)
+    const isDuplicate = user.masterPassengers.some(mp => {
+      const existingName = String(mp.name).toUpperCase().trim();
+      const existingDob = String(mp.dob || '').trim();
+      const existingIdType = String(mp.idType || 'AADHAR ID/VIRTUAL ID').toUpperCase().trim();
+      const existingIdNum = mp.idNumber ? String(mp.idNumber).toUpperCase().trim() : '';
+
+      const nameMatch = existingName === cleanName;
+      const dobMatch = existingDob === cleanDob;
+      const idTypeMatch = existingIdType === cleanIdType;
+      const idNumMatch = existingIdNum === cleanIdNumber;
+
+      return nameMatch && dobMatch && idTypeMatch && idNumMatch;
+    });
+
+    if (isDuplicate) {
+      return res.status(400).json({
+        success: false,
+        message: '⚠️ Passenger details already exist in your Master List!'
+      });
+    }
+
+    // Calculate approximate age from DOB if supplied
+    let calculatedAge = 25;
+    if (dob) {
+      const yearMatch = String(dob).match(/\d{4}/);
+      if (yearMatch) {
+        calculatedAge = Math.max(1, new Date().getFullYear() - parseInt(yearMatch[0]));
+      }
+    }
+
+    const newPassenger = {
+      id: 'MP_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+      passengerType: passengerType || 'Normal User',
+      name: cleanName,
+      dob: dob || '01-01-2000',
+      age: calculatedAge,
+      gender: gender || 'Male',
+      berth: berth && berth !== 'Select Berth Preference' ? berth : 'No Preference',
+      meal: meal || 'Veg',
+      status: 'Verified',
+      statusColor: 'text-emerald-600',
+      idType: idType || 'AADHAR ID/VIRTUAL ID',
+      idNumber: cleanIdNumber
+    };
+
+    user.masterPassengers.push(newPassenger);
+    await user.save();
+    console.log(`[MongoDB Atlas] Master passenger added for user @${user.username}: ${newPassenger.name}`);
+
+    res.json({
+      success: true,
+      message: '🎉 Passenger added to Master List successfully!',
+      passenger: newPassenger,
+      passengers: user.masterPassengers
+    });
+  } catch (err) {
+    console.error('Add master passenger error:', err);
+    res.status(500).json({ success: false, message: 'Database error adding master passenger' });
+  }
+});
+
+// Update Master List Passenger for User in MongoDB Database
+app.put('/api/master-passengers/update', async (req, res) => {
+  try {
+    const { username, passengerId, passengerType, name, dob, gender, berth, meal, idType, idNumber } = req.body;
+    if (!username || !passengerId || !name) {
+      return res.status(400).json({ success: false, message: 'Username, Passenger ID, and Name are required' });
+    }
+
+    const cleanUsername = String(username).toLowerCase().trim();
+    const user = await User.findOne({
+      $or: [
+        { username: cleanUsername },
+        { username: new RegExp(`^${cleanUsername}$`, 'i') }
+      ]
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User account not found' });
+    }
+
+    const passIndex = user.masterPassengers.findIndex(mp => mp.id === passengerId);
+    if (passIndex === -1) {
+      return res.status(404).json({ success: false, message: 'Passenger record not found in Master List' });
+    }
+
+    const cleanName = String(name).toUpperCase().trim();
+    const cleanDob = String(dob || '').trim();
+    const cleanIdType = String(idType || 'AADHAR ID/VIRTUAL ID').toUpperCase().trim();
+    const cleanIdNumber = idNumber ? String(idNumber).toUpperCase().trim() : '';
+
+    // Duplicate Passenger Check (ALL 4 FIELDS MUST MATCH, excluding current passengerId)
+    const isDuplicate = user.masterPassengers.some(mp => {
+      if (mp.id === passengerId) return false;
+      const existingName = String(mp.name).toUpperCase().trim();
+      const existingDob = String(mp.dob || '').trim();
+      const existingIdType = String(mp.idType || 'AADHAR ID/VIRTUAL ID').toUpperCase().trim();
+      const existingIdNum = mp.idNumber ? String(mp.idNumber).toUpperCase().trim() : '';
+
+      const nameMatch = existingName === cleanName;
+      const dobMatch = existingDob === cleanDob;
+      const idTypeMatch = existingIdType === cleanIdType;
+      const idNumMatch = existingIdNum === cleanIdNumber;
+
+      return nameMatch && dobMatch && idTypeMatch && idNumMatch;
+    });
+
+    if (isDuplicate) {
+      return res.status(400).json({
+        success: false,
+        message: '⚠️ Passenger details already exist in your Master List!'
+      });
+    }
+
+    let calculatedAge = user.masterPassengers[passIndex].age || 25;
+    if (dob) {
+      const yearMatch = String(dob).match(/\d{4}/);
+      if (yearMatch) {
+        calculatedAge = Math.max(1, new Date().getFullYear() - parseInt(yearMatch[0]));
+      }
+    }
+
+    user.masterPassengers[passIndex].passengerType = passengerType || user.masterPassengers[passIndex].passengerType;
+    user.masterPassengers[passIndex].name = cleanName;
+    user.masterPassengers[passIndex].dob = dob || user.masterPassengers[passIndex].dob;
+    user.masterPassengers[passIndex].age = calculatedAge;
+    user.masterPassengers[passIndex].gender = gender || user.masterPassengers[passIndex].gender;
+    user.masterPassengers[passIndex].berth = berth && berth !== 'Select Berth Preference' ? berth : user.masterPassengers[passIndex].berth;
+    user.masterPassengers[passIndex].meal = meal || user.masterPassengers[passIndex].meal || 'Veg';
+    user.masterPassengers[passIndex].idType = idType || user.masterPassengers[passIndex].idType || 'AADHAR ID/VIRTUAL ID';
+    if (idNumber !== undefined) user.masterPassengers[passIndex].idNumber = cleanIdNumber;
+
+    await user.save();
+    console.log(`[MongoDB Atlas] Master passenger ${passengerId} updated for user @${user.username}: ${name}`);
+
+    res.json({
+      success: true,
+      message: '🎉 Passenger details updated in Master List successfully!',
+      passengers: user.masterPassengers
+    });
+  } catch (err) {
+    console.error('Update master passenger error:', err);
+    res.status(500).json({ success: false, message: 'Database error updating master passenger' });
+  }
+});
+
+// Delete Master List Passenger for User in MongoDB Database
+app.delete('/api/master-passengers/delete', async (req, res) => {
+  try {
+    const { username, passengerId } = req.body;
+    if (!username || !passengerId) {
+      return res.status(400).json({ success: false, message: 'Username and Passenger ID are required' });
+    }
+
+    const cleanUsername = String(username).toLowerCase().trim();
+    const user = await User.findOne({
+      $or: [
+        { username: cleanUsername },
+        { username: new RegExp(`^${cleanUsername}$`, 'i') }
+      ]
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User account not found' });
+    }
+
+    user.masterPassengers = user.masterPassengers.filter(mp => mp.id !== passengerId);
+    await user.save();
+    console.log(`[MongoDB Atlas] Master passenger ${passengerId} deleted for user @${user.username}`);
+
+    res.json({
+      success: true,
+      message: 'Passenger deleted from Master List successfully',
+      passengers: user.masterPassengers
+    });
+  } catch (err) {
+    console.error('Delete master passenger error:', err);
+    res.status(500).json({ success: false, message: 'Database error deleting master passenger' });
+  }
+});
+
 // Fetch User Profile & Stats
 app.get('/api/auth/profile/:username', async (req, res) => {
   try {
     const { username } = req.params;
-    const user = await User.findOne({ username });
+    const cleanUsername = String(username).toLowerCase().trim();
+    const user = await User.findOne({
+      $or: [
+        { username: cleanUsername },
+        { username: new RegExp(`^${cleanUsername}$`, 'i') }
+      ]
+    });
     if (!user) {
       return res.status(404).json({ success: false, message: 'User account not found' });
     }
-    const bookingsCount = await Booking.countDocuments({ username });
+    const bookingsCount = await Booking.countDocuments({ username: cleanUsername });
     res.json({
       success: true,
       user: {
+        id: user._id,
         username: user.username,
         email: user.email,
         fullName: user.fullName,
+        phone: user.phone,
+        gender: user.gender || '',
+        dob: user.dob || '',
+        country: user.country || 'India',
+        address: user.address || '',
         walletBalance: user.walletBalance,
         bookingsCount
       }
@@ -392,13 +830,79 @@ app.patch('/api/bookings/:pnr/boarding', async (req, res) => {
   }
 });
 
-// ==========================================
-// 3. TICKET CANCELLATION API (18% GST Calculation)
-// ==========================================
+
+// Fetch Cancellation Record by PNR (for PNR Status page and Cancel page)
+app.get('/api/cancellations/pnr/:pnr', async (req, res) => {
+  try {
+    const cleanPnr = req.params.pnr.replace(/\D/g, '');
+    const cancellation = await Cancellation.findOne({ pnr: cleanPnr });
+    if (cancellation) {
+      return res.json({ success: true, cancellation });
+    }
+    // Fallback: read from Booking.cancellationDetails
+    const booking = await Booking.findOne({ pnr: cleanPnr, isCancelled: true });
+    if (booking && booking.cancellationDetails && booking.cancellationDetails.cancellationId) {
+      const cd = booking.cancellationDetails;
+      return res.json({
+        success: true,
+        cancellation: {
+          cancellationId:   cd.cancellationId,
+          pnr:              cleanPnr,
+          username:         booking.username,
+          trainNumber:      booking.trainNumber,
+          trainName:        booking.trainName,
+          from:             booking.from,
+          to:               booking.to,
+          journeyDate:      booking.date,
+          classCode:        booking.classCode,
+          cancelledAt:      cd.cancelledAt,
+          cancelledDate:    cd.cancelledDate || '',
+          cancelledTime:    cd.cancelledTime || '',
+          cancelledDateIST: cd.cancelledDateIST || '',
+          ticketFare:       cd.ticketFare,
+          convenienceFee:   cd.convenienceFee,
+          insurancePremium: cd.insurancePremium,
+          totalPaid:        cd.totalPaid,
+          grossFare:        cd.grossFare,
+          baseCancelCharge: cd.baseCancelCharge,
+          cgst9:            cd.cgst9,
+          sgst9:            cd.sgst9,
+          gst18:            cd.gst18,
+          totalDeduction:   cd.totalDeduction,
+          netRefund:        cd.netRefund,
+          cancelReason:     cd.cancelReason || 'Change of Travel Plan',
+          passengerCount:   cd.passengerCount,
+          refundMode:       cd.refundMode || 'Original Payment Source (Bank/UPI)',
+          refundEta:        cd.refundEta || '2-3 Business Days',
+          cancelledPassengers: booking.passengers
+        }
+      });
+    }
+    return res.status(404).json({ success: false, message: 'Cancellation record not found for this PNR' });
+  } catch (err) {
+    console.error('Fetch cancellation by PNR error:', err);
+    res.status(500).json({ success: false, message: 'Database error fetching cancellation by PNR' });
+  }
+});
+
+// Fetch All Cancellations for a User (for Cancel History page)
+app.get('/api/cancellations/user/:username', async (req, res) => {
+  try {
+    const cleanUsername = String(req.params.username).toLowerCase().trim();
+    const cancellations = await Cancellation.find({
+      username: { $regex: new RegExp('^' + cleanUsername.replace(/[.*+?^{}()|[\]\\]/g, '\\$&') + '$', 'i') }
+    }).sort({ createdAt: -1 });
+    res.json({ success: true, count: cancellations.length, cancellations });
+  } catch (err) {
+    console.error('Fetch user cancellations error:', err);
+    res.status(500).json({ success: false, message: 'Database error fetching user cancellations' });
+  }
+});
+
 
 app.post('/api/bookings/cancel', async (req, res) => {
   try {
-    const { pnr, username } = req.body;
+    const { pnr, username, cancelReason: reqCancelReason } = req.body;
     if (!pnr) {
       return res.status(400).json({ success: false, message: 'PNR is required for cancellation' });
     }
@@ -445,23 +949,49 @@ app.post('/api/bookings/cancel', async (req, res) => {
     const netRefund = Math.max(0, Math.round((ticketFare - totalDeduction) * 100) / 100);
 
     const cancellationId = `CAN_${Date.now()}`;
-    const cancelledAt = new Date().toISOString();
+    const cancelledAtISO = new Date().toISOString();
+
+    // ── Compute human-readable IST timestamps ──────────────────────────────────
+    const nowIST = new Date(new Date().getTime() + (5.5 * 60 * 60 * 1000));  // UTC+5:30
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const IST_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const cdd  = pad2(nowIST.getUTCDate());
+    const cmon = IST_MONTHS[nowIST.getUTCMonth()];
+    const cyyyy = nowIST.getUTCFullYear();
+    const chh24 = pad2(nowIST.getUTCHours());
+    const cmm   = pad2(nowIST.getUTCMinutes());
+    const css   = pad2(nowIST.getUTCSeconds());
+    const chh12 = pad2(nowIST.getUTCHours() % 12 || 12);
+    const campm = nowIST.getUTCHours() < 12 ? 'AM' : 'PM';
+    const cancelledDate    = `${cdd}-${cmon}-${cyyyy}`;                           // "28-Jul-2026"
+    const cancelledTime    = `${chh24}:${cmm}:${css}`;                            // "18:43:33"
+    const cancelledDateIST = `${cdd} ${cmon} ${cyyyy}, ${chh12}:${cmm} ${campm}`; // "28 Jul 2026, 06:43 PM"
+    const cancelReason     = reqCancelReason || 'Change of Travel Plan';
+    const refundMode       = 'Original Payment Source (Bank/UPI)';
+    const refundEta        = '2-3 Business Days';
+    // ──────────────────────────────────────────────────────────────────────────
 
     const cancellationDetails = {
       cancellationId,
-      cancelledAt,
-      totalPaid,
+      cancelledAt:      cancelledAtISO,
+      cancelledDate,
+      cancelledTime,
+      cancelledDateIST,
       ticketFare,
       convenienceFee,
       insurancePremium,
-      nonRefundableFees,
+      totalPaid,
       grossFare,
       baseCancelCharge,
       cgst9,
       sgst9,
       gst18,
       totalDeduction,
-      netRefund
+      netRefund,
+      cancelReason,
+      passengerCount,
+      refundMode,
+      refundEta
     };
 
     // Update Booking in MongoDB
@@ -476,7 +1006,7 @@ app.post('/api/bookings/cancel', async (req, res) => {
     }
     await booking.save();
 
-    // Save Cancellation Advice Document in MongoDB
+    // Save full Cancellation Advice Document in MongoDB
     const newCancellation = new Cancellation({
       cancellationId,
       pnr,
@@ -485,20 +1015,39 @@ app.post('/api/bookings/cancel', async (req, res) => {
       trainName: booking.trainName,
       from: booking.from,
       to: booking.to,
+      journeyDate: booking.date,
       date: booking.date,
       classCode: booking.classCode,
+      // Full fare breakdown
+      ticketFare,
+      convenienceFee,
+      insurancePremium,
+      totalPaid,
       grossFare,
       baseCancelCharge,
+      cgst9,
+      sgst9,
       gst18,
       totalDeduction,
       netRefund,
-      cancelledPassengers: booking.passengers,
-      cancelledAt
+      // All timestamp formats for easy display
+      cancelledAt:      cancelledAtISO,
+      cancelledDate,
+      cancelledTime,
+      cancelledDateIST,
+      // Context
+      cancelReason,
+      refundMode,
+      refundEta,
+      passengerCount,
+      cancelledPassengers: booking.passengers
     });
     await newCancellation.save();
 
     // Refund Net Amount to User Wallet
     await User.updateOne({ username: booking.username }, { $inc: { walletBalance: netRefund } });
+
+    console.log(`[MongoDB Atlas] ✅ CANCELLED — PNR: ${pnr} | User: @${booking.username} | Date: ${cancelledDateIST} | Refund: ₹${netRefund}`);
 
     res.json({
       success: true,
