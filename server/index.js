@@ -56,6 +56,7 @@ export const connectDB = async () => {
     });
     await cachedConn;
     console.log('✅ Connected to Primary Production MongoDB Database [irctc_db]');
+    seedDefaultUsers().catch(e => console.warn('Seed notice:', e.message));
     return mongoose.connection;
   } catch (err) {
     console.warn('⚠️ Primary MongoDB Atlas connection failed:', err.message);
@@ -75,6 +76,51 @@ export const connectDB = async () => {
       }
     }
     return null;
+  }
+};
+
+// Auto-seed default demo accounts in MongoDB Atlas if missing
+export const seedDefaultUsers = async () => {
+  try {
+    if (mongoose.connection.readyState !== 1) return;
+    const defaultAccounts = [
+      {
+        username: 'ashirwad',
+        email: 'ashirwad@irctc.gov.in',
+        password: 'ashirwad',
+        fullName: 'ASHIRWAD KUMAR',
+        phone: '+91 98765 43210',
+        walletBalance: 10000
+      },
+      {
+        username: 'admin',
+        email: 'admin@irctc.gov.in',
+        password: 'admin',
+        fullName: 'IRCTC SYSTEM ADMINISTRATOR',
+        phone: '+91 99999 88888',
+        walletBalance: 50000
+      }
+    ];
+
+    for (const acc of defaultAccounts) {
+      const exists = await User.findOne({
+        $or: [{ username: acc.username }, { email: acc.email }]
+      });
+      if (!exists) {
+        await User.create({
+          ...acc,
+          gender: 'Male',
+          dob: '1998-05-15',
+          country: 'India',
+          address: 'New Delhi, India',
+          lastUsernameChangeAt: new Date(),
+          lastPasswordChangeAt: new Date()
+        });
+        console.log(`[MongoDB Atlas] Auto-seeded default account: ${acc.username}`);
+      }
+    }
+  } catch (err) {
+    console.warn('Auto-seed default accounts notice:', err.message);
   }
 };
 
@@ -137,6 +183,10 @@ app.post('/api/auth/register', async (req, res) => {
     const { username, email, password, fullName, phone } = req.body;
     if (!username || !email || !password) {
       return res.status(400).json({ success: false, message: 'Username, Email and Password are required' });
+    }
+
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ success: false, message: 'Database temporarily unavailable. Using local offline storage.' });
     }
 
     const cleanUsername = String(username).toLowerCase().trim();
@@ -203,16 +253,17 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ success: false, message: 'User ID and Password are required' });
     }
 
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ success: false, message: 'Database temporarily unavailable. Using local offline storage.' });
+    }
+
     const cleanIdentifier = String(username).toLowerCase().trim();
-    const cleanPhoneDigits = cleanIdentifier.replace(/\D/g, '');
 
     let user = await User.findOne({
       $or: [
         { username: cleanIdentifier },
         { email: cleanIdentifier },
-        { phone: cleanIdentifier },
-        { username: new RegExp(`^${cleanIdentifier}$`, 'i') },
-        ...(cleanPhoneDigits.length >= 10 ? [{ phone: new RegExp(cleanPhoneDigits.slice(-10)) }] : [])
+        { phone: cleanIdentifier }
       ]
     });
 
@@ -268,7 +319,7 @@ app.post('/api/auth/login', async (req, res) => {
     });
   } catch (err) {
     console.error('Login error:', err);
-    res.status(500).json({ success: false, message: 'Database error verifying credentials' });
+    res.status(503).json({ success: false, message: 'Database temporarily unavailable. Please try offline login.' });
   }
 });
 
