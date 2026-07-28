@@ -52,6 +52,13 @@ export default function LoginModal({ onClose, onLoginSuccess, bookingNotice }) {
     ];
     const demoAccount = DEMO_ACCOUNTS.find(u => u.username === cleanUsername);
 
+    // Check local storage for this user
+    const localReg = JSON.parse(localStorage.getItem('railx_registered_users') || '[]');
+    const localUser = localReg.find(u => String(u.username).toLowerCase() === cleanUsername);
+
+    // The authoritative local account (demo takes priority over localStorage)
+    const localAccount = demoAccount || localUser;
+
     try {
       const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
@@ -59,16 +66,15 @@ export default function LoginModal({ onClose, onLoginSuccess, bookingNotice }) {
         body: JSON.stringify({ username: cleanUsername, password })
       });
       const data = await safeJsonParse(res);
-      
+
+      // ✅ Server login SUCCESS — use rich server data
       if (res.ok && data && data.success && data.user) {
         setIsSubmitting(false);
-        // Also ensure user is saved in local registry cache
-        const localReg = JSON.parse(localStorage.getItem('railx_registered_users') || '[]');
+        // Sync to local registry cache
         if (!localReg.some(u => String(u.username).toLowerCase() === cleanUsername)) {
           localReg.push(data.user);
           localStorage.setItem('railx_registered_users', JSON.stringify(localReg));
         }
-
         onLoginSuccess({
           id: data.user.id,
           name: data.user.fullName || data.user.username.toUpperCase(),
@@ -91,54 +97,51 @@ export default function LoginModal({ onClose, onLoginSuccess, bookingNotice }) {
           isKycVerified: true
         });
         return;
-      } else if (res.status === 401 && data && data.message) {
-        // Server found the user but rejected password.
-        // However, if this is a demo account and the demo password matches,
-        // the Atlas record may be stale — allow login via client-side demo credentials.
-        if (demoAccount && demoAccount.password === password) {
-          // fall through to demo account login below
-        } else {
-          setIsSubmitting(false);
-          setErrorMsg(data.message);
-          return;
-        }
-      } else if (res.status === 400 && data && data.message) {
-        // User not found in DB at all — also check demo/local fallback
-        if (!demoAccount) {
-          setIsSubmitting(false);
-          setErrorMsg(data.message);
-          return;
-        }
-        // else fall through to demo account check below
       }
-      // 503 / any other non-fatal server issue → fall through to local fallback below
+
+      // ❌ Server returned an auth error — but only trust it if DB is connected
+      // If DB is offline (503) ignore server error and fall through to local auth
+      if (res.status === 401 || res.status === 400) {
+        // If we have NO local account either, show the server's error message
+        if (!localAccount) {
+          setIsSubmitting(false);
+          setErrorMsg(data?.message || 'Login failed. Please check your credentials.');
+          return;
+        }
+        // We have a local account — fall through and validate password locally below
+      }
+      // Any other status (503, 500, etc.) → fall through to local auth
     } catch (err) {
-      console.warn("MongoDB login fetch notice:", err);
+      console.warn('MongoDB login fetch notice:', err);
+      // Network error → fall through to local auth
     }
 
-    // Offline / fallback: check demo accounts first, then local registered users
-    const localReg = JSON.parse(localStorage.getItem('railx_registered_users') || '[]');
-    const matchUser = demoAccount || localReg.find(u => String(u.username).toLowerCase() === cleanUsername);
-
+    // ──── LOCAL / OFFLINE AUTH (always runs when server didn't succeed) ────
     setIsSubmitting(false);
-    if (!matchUser) {
-      setErrorMsg('User ID is not registered in the database. Please create an IRCTC account first.');
+
+    if (!localAccount) {
+      setErrorMsg('User ID is not registered. Please create an IRCTC account first.');
       return;
     }
 
-    if (matchUser.password !== password) {
+    if (localAccount.password !== password) {
       setErrorMsg('Invalid Password. Please check your credentials.');
       return;
     }
 
-    // Successful fallback login with registered user record
+    // ✅ Local login SUCCESS
     onLoginSuccess({
-      name: matchUser.fullName || matchUser.username.toUpperCase(),
-      username: matchUser.username,
-      email: matchUser.email || `${matchUser.username}@irctc.gov.in`,
-      phone: matchUser.phone || '+91 98765 43210',
+      name: localAccount.fullName || localAccount.username.toUpperCase(),
+      fullName: localAccount.fullName,
+      username: localAccount.username,
+      email: localAccount.email || `${localAccount.username}@irctc.gov.in`,
+      phone: localAccount.phone || '+91 98765 43210',
+      gender: localAccount.gender || '',
+      dob: localAccount.dob || '',
+      country: localAccount.country || 'India',
+      address: localAccount.address || '',
       irctcId: `IRCTC_${Math.floor(100000 + Math.random() * 900000)}`,
-      walletBalance: matchUser.walletBalance || 10000,
+      walletBalance: localAccount.walletBalance || 10000,
       loyaltyPoints: 1250,
       isKycVerified: true
     });
