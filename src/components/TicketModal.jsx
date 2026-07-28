@@ -216,11 +216,45 @@ SECURITY SIGNATURE: IRCTC_VERIFIED_0x${pnrNo}`;
     }
   };
 
+  const activeUser = (() => {
+    try {
+      const u = localStorage.getItem('railx_current_user');
+      return u ? JSON.parse(u) : null;
+    } catch (e) {
+      return null;
+    }
+  })();
+
+  const rawEmail = ticket.email || activeUser?.email || (activeUser?.username ? `${activeUser.username}@irctc.gov.in` : 'user@irctc.gov.in');
+  const rawMobile = ticket.phone || ticket.mobile || activeUser?.phone || activeUser?.mobile || '+91 98765 43210';
+
+  const maskEmail = (emailStr) => {
+    if (!emailStr) return 'user@irctc.gov.in';
+    const [local, domain] = emailStr.split('@');
+    if (!local || !domain) return emailStr;
+    if (local.length <= 2) return `${local}***@${domain}`;
+    return `${local.slice(0, 2)}${'*'.repeat(Math.min(local.length - 2, 6))}@${domain}`;
+  };
+
+  const maskMobile = (phoneStr) => {
+    if (!phoneStr) return '91-98******10';
+    const digits = phoneStr.replace(/\D/g, '');
+    if (digits.length >= 10) {
+      const last10 = digits.slice(-10);
+      const prefix = digits.length > 10 ? digits.slice(0, digits.length - 10) : '91';
+      return `${prefix}-${last10.slice(0, 2)}******${last10.slice(-2)}`;
+    }
+    return phoneStr;
+  };
+
+  const ticketMaskedEmail = maskEmail(rawEmail);
+  const ticketMaskedMobile = maskMobile(rawMobile);
+
   const handleSendEmail = () => {
     setSendingEmail(true);
     setTimeout(() => {
       setSendingEmail(false);
-      setEmailSentToast(`E-Ticket & PNR #${ticket.pnr} successfully sent to email as******@gmail.com!`);
+      setEmailSentToast(`E-Ticket & PNR #${ticket.pnr || pnrNo} successfully sent to email ${ticketMaskedEmail}!`);
       setTimeout(() => setEmailSentToast(''), 4000);
     }, 600);
   };
@@ -310,7 +344,7 @@ SECURITY SIGNATURE: IRCTC_VERIFIED_0x${pnrNo}`;
         <div className="bg-emerald-50 px-4 sm:px-6 py-2 border-b border-emerald-200 flex flex-wrap items-center justify-between gap-2 text-xs text-emerald-900 shrink-0 font-medium">
           <div className="flex items-center gap-2">
             <Mail className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>Ticket details & PDF sent to email- <strong className="text-emerald-950 underline">as******@gmail.com</strong> and registered mobile number <strong className="text-emerald-950">91-62******06</strong></span>
+            <span>Ticket details & PDF sent to email- <strong className="text-emerald-950 underline">{ticketMaskedEmail}</strong> and registered mobile number <strong className="text-emerald-950">{ticketMaskedMobile}</strong></span>
           </div>
           <span className="text-[10px] font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
             ✓ MAIL SENT

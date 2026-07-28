@@ -5,6 +5,41 @@ import { API_BASE_URL, safeJsonParse } from '../config/api';
 
 export default function PassengerDetailsModal({ user, train, selectedClass, selectedSeats: initialSeats, quota: passedQuota, journeyDate: passedJourneyDate, onClose, onProceedToPayment }) {
   const journeyDate = passedJourneyDate || train?.journeyDate || '';
+
+  // Helpers to dynamically mask email and mobile for logged-in user profile
+  const maskEmail = (emailStr) => {
+    if (!emailStr) return 'user@irctc.gov.in';
+    const [local, domain] = emailStr.split('@');
+    if (!local || !domain) return emailStr;
+    if (local.length <= 2) return `${local}***@${domain}`;
+    return `${local.slice(0, 2)}${'*'.repeat(Math.min(local.length - 2, 6))}@${domain}`;
+  };
+
+  const maskMobile = (phoneStr) => {
+    if (!phoneStr) return '91-98******10';
+    const digits = phoneStr.replace(/\D/g, '');
+    if (digits.length >= 10) {
+      const last10 = digits.slice(-10);
+      const prefix = digits.length > 10 ? digits.slice(0, digits.length - 10) : '91';
+      return `${prefix}-${last10.slice(0, 2)}******${last10.slice(-2)}`;
+    }
+    return phoneStr;
+  };
+
+  const currentUser = user || (() => {
+    try {
+      const u = localStorage.getItem('railx_current_user');
+      return u ? JSON.parse(u) : null;
+    } catch (e) {
+      return null;
+    }
+  })();
+
+  const rawUserEmail = currentUser?.email || (currentUser?.username ? `${currentUser.username}@irctc.gov.in` : '');
+  const rawUserMobile = currentUser?.phone || currentUser?.mobile || '';
+
+  const displayMaskedEmail = maskEmail(rawUserEmail);
+  const displayMaskedMobile = maskMobile(rawUserMobile);
   // Dynamic Master List sourcing strictly scoped to active user profile
   const getInitialMasterList = () => {
     const savedUser = user || (() => {
@@ -731,10 +766,10 @@ export default function PassengerDetailsModal({ user, train, selectedClass, sele
                 </div>
               )}
 
-                {/* Contact Notification Info */}
+                {/* Contact Notification Info - Dynamic from User Profile */}
                 <div className="p-3 bg-[#eef4ff] rounded-xl border border-blue-200 text-xs text-slate-800 space-y-2">
                   <p className="font-semibold">
-                    Ticket details will be sent to email- <span className="font-bold text-[#0026cd]">as******@gmail.com</span> and registered mobile number <span className="font-bold text-[#0026cd]">91-62******06</span>
+                    Ticket details will be sent to email- <span className="font-bold text-[#0026cd]">{displayMaskedEmail}</span> and registered mobile number <span className="font-bold text-[#0026cd]">{displayMaskedMobile}</span>
                   </p>
                   
                   {step === 'input' && (
