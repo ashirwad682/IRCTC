@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { API_BASE_URL, safeJsonParse } from '../config/api';
-import { X, Eye, EyeOff, Lock, User, ShieldCheck, KeyRound, Mail, Calendar, ArrowRight, Check, ArrowLeft, AlertCircle, Phone, UserPlus, Info } from 'lucide-react';
+import { X, Eye, EyeOff, Lock, User, ShieldCheck, KeyRound, Mail, Calendar, ArrowRight, Check, ArrowLeft, AlertCircle, Phone, UserPlus, Info, Sparkles, Plus } from 'lucide-react';
 
 export default function LoginModal({ onClose, onLoginSuccess, bookingNotice }) {
   // Modal Mode: 'signin' | 'register' | 'forgot'
@@ -35,6 +35,48 @@ export default function LoginModal({ onClose, onLoginSuccess, bookingNotice }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  // ──── Username Availability & Suggestion Helpers ────
+  const getTakenUsernames = () => {
+    const demoList = ['ashirwad', 'admin'];
+    try {
+      const localReg = JSON.parse(localStorage.getItem('railx_registered_users') || '[]');
+      const localNames = localReg.map(u => String(u.username || '').trim().toLowerCase());
+      return Array.from(new Set([...demoList, ...localNames]));
+    } catch (e) {
+      return demoList;
+    }
+  };
+
+  const cleanRegUsername = regUsername.trim().toLowerCase();
+  const takenUsernames = getTakenUsernames();
+  const isRegUsernameTaken = cleanRegUsername.length >= 2 && takenUsernames.includes(cleanRegUsername);
+  const isRegUsernameAvailable = cleanRegUsername.length >= 3 && !isRegUsernameTaken;
+
+  const generateUsernameSuggestions = (baseName) => {
+    const clean = baseName.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!clean) return [];
+    
+    const candidates = [
+      `${clean}_irctc`,
+      `${clean}2026`,
+      `${clean}${Math.floor(100 + Math.random() * 900)}`,
+      `${clean}_rail`,
+      `${clean}_99`,
+      `irctc_${clean}`
+    ];
+
+    const validSuggestions = [];
+    for (const cand of candidates) {
+      if (!takenUsernames.includes(cand) && !validSuggestions.includes(cand)) {
+        validSuggestions.push(cand);
+      }
+      if (validSuggestions.length >= 3) break;
+    }
+    return validSuggestions;
+  };
+
+  const regUsernameSuggestions = isRegUsernameTaken ? generateUsernameSuggestions(cleanRegUsername) : [];
 
   // Handle Login Submit
   const handleLoginSubmit = async (e) => {
@@ -155,6 +197,10 @@ export default function LoginModal({ onClose, onLoginSuccess, bookingNotice }) {
 
     if (!regUsername.trim()) {
       setErrorMsg('User Name is required.');
+      return;
+    }
+    if (isRegUsernameTaken) {
+      setErrorMsg(`User Name "${cleanRegUsername}" is already registered. Please pick one of the suggested usernames below.`);
       return;
     }
     if (!regPassword) {
@@ -482,24 +528,79 @@ export default function LoginModal({ onClose, onLoginSuccess, bookingNotice }) {
                 <p>2. Opening Advance Reservation Period (ARP) ticket and Opening Tatkal ticket booking for unauthenticated users is allowed only after 4 days from date of User Registration (excluding the day of registration). User may authenticate their user profile with Aadhaar to book Opening Advance Reservation Period (ARP) ticket and Opening Tatkal ticket.</p>
               </div>
 
-              {/* 1. User Name Input */}
+              {/* 1. User Name Input with Real-time Availability & Suggestions */}
               <div className="space-y-1">
-                <label className="block text-xs font-extrabold text-[#000066]">
-                  User Name <span className="text-rose-600">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={regUsername}
-                  onChange={(e) => setRegUsername(e.target.value)}
-                  onBlur={() => setUsernameTouched(true)}
-                  placeholder="Enter preferred User Name"
-                  required
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white font-bold text-xs text-slate-900 focus:outline-none focus:border-[#000066] focus:ring-1 focus:ring-[#000066]"
-                />
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-extrabold text-[#000066]">
+                    User Name <span className="text-rose-600">*</span>
+                  </label>
+                  {isRegUsernameAvailable && (
+                    <span className="text-[11px] font-black text-emerald-600 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      <Check className="w-3.5 h-3.5" /> Username Available!
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={regUsername}
+                    onChange={(e) => {
+                      setRegUsername(e.target.value);
+                      setUsernameTouched(true);
+                    }}
+                    onBlur={() => setUsernameTouched(true)}
+                    placeholder="Enter preferred User Name (e.g. rahul123)"
+                    required
+                    className={`w-full px-3.5 py-2.5 rounded-xl border bg-white font-bold text-xs text-slate-900 focus:outline-none transition-all ${
+                      isRegUsernameTaken
+                        ? 'border-rose-400 focus:border-rose-600 focus:ring-1 focus:ring-rose-600 bg-rose-50/30'
+                        : isRegUsernameAvailable
+                        ? 'border-emerald-400 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 bg-emerald-50/20'
+                        : 'border-slate-300 focus:border-[#000066] focus:ring-1 focus:ring-[#000066]'
+                    }`}
+                  />
+                </div>
+
+                {/* Validation Error if empty */}
                 {usernameTouched && !regUsername.trim() && (
                   <div className="p-2 rounded-lg bg-rose-50 border border-rose-200 text-xs font-bold text-rose-700 flex items-center gap-1.5 mt-1">
                     <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                     <span>User Name is required.</span>
+                  </div>
+                )}
+
+                {/* Username Taken Notice & Smart Suggestions */}
+                {isRegUsernameTaken && (
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-900 space-y-2 mt-1 animate-in fade-in duration-200">
+                    <div className="flex items-center gap-1.5 font-black text-rose-700">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span>User Name "{regUsername.trim()}" is already taken!</span>
+                    </div>
+
+                    {regUsernameSuggestions.length > 0 && (
+                      <div className="space-y-1.5 pt-1.5 border-t border-amber-200/80">
+                        <span className="text-[11px] font-extrabold text-amber-900 flex items-center gap-1">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                          Suggested available usernames (Click to select):
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {regUsernameSuggestions.map((sug) => (
+                            <button
+                              key={sug}
+                              type="button"
+                              onClick={() => {
+                                setRegUsername(sug);
+                                setUsernameTouched(true);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-white border border-amber-400 hover:border-[#000066] text-[#000066] hover:bg-[#000066] hover:text-white font-extrabold text-[11px] transition-all shadow-sm flex items-center gap-1 cursor-pointer"
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>{sug}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

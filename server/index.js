@@ -186,6 +186,30 @@ app.post('/api/admin/fix-wallets', async (req, res) => {
 // 1. USER ACCOUNT AUTHENTICATION & PROFILE APIs
 // ==========================================
 
+// Check Username Availability
+app.get('/api/auth/check-username', async (req, res) => {
+  try {
+    const { username } = req.query;
+    if (!username) return res.json({ available: false, message: 'Username parameter required' });
+
+    const cleanUsername = String(username).toLowerCase().trim();
+    const DEMO_USERNAMES = ['ashirwad', 'admin'];
+    if (DEMO_USERNAMES.includes(cleanUsername)) {
+      return res.json({ available: false, taken: true });
+    }
+
+    if (mongoose.connection.readyState === 1) {
+      const existingUser = await User.findOne({ username: cleanUsername });
+      if (existingUser) {
+        return res.json({ available: false, taken: true });
+      }
+    }
+    res.json({ available: true, taken: false });
+  } catch (err) {
+    res.json({ available: true, taken: false });
+  }
+});
+
 // Register New User
 app.post('/api/auth/register', async (req, res) => {
   try {
