@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { API_BASE_URL } from '../config/api';
+import { API_BASE_URL, safeJsonParse } from '../config/api';
 import { X, Eye, EyeOff, Lock, User, ShieldCheck, KeyRound, Mail, Calendar, ArrowRight, Check, ArrowLeft, AlertCircle, Phone, UserPlus, Info } from 'lucide-react';
 
 export default function LoginModal({ onClose, onLoginSuccess, bookingNotice }) {
@@ -51,7 +51,7 @@ export default function LoginModal({ onClose, onLoginSuccess, bookingNotice }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: cleanUsername, password })
       });
-      const data = await res.json();
+      const data = await safeJsonParse(res);
       
       if (res.ok && data && data.success && data.user) {
         setIsSubmitting(false);
@@ -84,7 +84,7 @@ export default function LoginModal({ onClose, onLoginSuccess, bookingNotice }) {
           isKycVerified: true
         });
         return;
-      } else if (data && data.message) {
+      } else if (data && (res.status === 400 || res.status === 401) && data.message) {
         setIsSubmitting(false);
         setErrorMsg(data.message);
         return;
@@ -167,7 +167,7 @@ export default function LoginModal({ onClose, onLoginSuccess, bookingNotice }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newUserObj)
       });
-      const data = await res.json();
+      const data = await safeJsonParse(res);
       setIsSubmitting(false);
 
       if (res.ok && data && data.success) {
@@ -184,7 +184,7 @@ export default function LoginModal({ onClose, onLoginSuccess, bookingNotice }) {
         setPassword('');
         setActiveTab('signin');
         return;
-      } else if (data && data.message) {
+      } else if (data && (res.status === 400 || res.status === 409) && data.message) {
         setErrorMsg(data.message);
         return;
       }

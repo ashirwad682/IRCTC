@@ -1,5 +1,5 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { API_BASE_URL } from './config/api';
+import { API_BASE_URL, safeJsonParse } from './config/api';
 import Navbar from './components/Navbar';
 import HeroSearch from './components/HeroSearch';
 import TrainSearchResultsPage from './components/TrainSearchResultsPage';
@@ -131,7 +131,7 @@ export default function App() {
     if (currentUser?.username) {
       const cleanUser = String(currentUser.username).toLowerCase();
       fetch(`${API_BASE_URL}/api/bookings/user/${encodeURIComponent(currentUser.username)}`)
-        .then(res => res.json())
+        .then(res => safeJsonParse(res))
         .then(data => {
           if (data && data.success && Array.isArray(data.bookings)) {
             const ownBookings = data.bookings.filter(b =>
@@ -330,7 +330,7 @@ export default function App() {
     const fetchEndpoint = `${API_BASE_URL}/api/bookings/user/${encodeURIComponent(currentUser.username)}`;
 
     fetch(fetchEndpoint)
-      .then(res => res.json())
+      .then(res => safeJsonParse(res))
       .then(data => {
         if (data && data.success && Array.isArray(data.bookings)) {
           const ownBookings = data.bookings.filter(b =>
@@ -621,14 +621,14 @@ export default function App() {
         txnId: stampedBooking.txnId,
       })
     })
-    .then(res => res.json())
+    .then(res => safeJsonParse(res))
     .then(data => {
       if (data && data.success && data.booking) {
         console.log(`[MongoDB Atlas] Ticket ${stampedBooking.pnr} persisted under account: ${targetUsername}`);
         // Re-fetch user's bookings from MongoDB Database to ensure exact database persistence in state
         const cleanUser = String(targetUsername).toLowerCase();
         fetch(`${API_BASE_URL}/api/bookings/user/${encodeURIComponent(targetUsername)}`)
-          .then(r => r.json())
+          .then(r => safeJsonParse(r))
           .then(dbData => {
             if (dbData && dbData.success && Array.isArray(dbData.bookings)) {
               const ownBookings = dbData.bookings.filter(b =>
@@ -664,7 +664,7 @@ export default function App() {
     if (currentUser?.username) {
       const cleanUser = String(currentUser.username).toLowerCase();
       fetch(`${API_BASE_URL}/api/bookings/user/${encodeURIComponent(currentUser.username)}`)
-        .then(res => res.json())
+        .then(res => safeJsonParse(res))
         .then(data => {
           if (data && data.success && Array.isArray(data.bookings)) {
             const ownBookings = data.bookings.filter(b =>

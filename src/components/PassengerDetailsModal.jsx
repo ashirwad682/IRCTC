@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Users, Plus, Trash2, ArrowLeft, ChevronDown, Check, ShieldCheck, Info, MapPin, Train, Clock, X, Calendar, CheckCircle2, Lock, Edit2, AlertTriangle, CreditCard } from 'lucide-react';
 import { getEffectiveSeatStatus } from '../services/seatInventoryService';
-import { API_BASE_URL } from '../config/api';
+import { API_BASE_URL, safeJsonParse } from '../config/api';
 
 export default function PassengerDetailsModal({ user, train, selectedClass, selectedSeats: initialSeats, quota: passedQuota, journeyDate: passedJourneyDate, onClose, onProceedToPayment }) {
   const journeyDate = passedJourneyDate || train?.journeyDate || '';
@@ -52,7 +52,7 @@ export default function PassengerDetailsModal({ user, train, selectedClass, sele
 
     const activeUsername = savedUser?.username || 'ashirwad';
     fetch(`${API_BASE_URL}/api/master-passengers/${activeUsername}`)
-      .then(res => res.json())
+      .then(res => safeJsonParse(res))
       .then(data => {
         if (data && data.success && Array.isArray(data.passengers) && data.passengers.length > 0) {
           const mapped = data.passengers.map((mp, idx) => ({
@@ -86,7 +86,7 @@ export default function PassengerDetailsModal({ user, train, selectedClass, sele
 
     const activeUsername = savedUser?.username || 'ashirwad';
     fetch(`${API_BASE_URL}/api/master-passengers/${activeUsername}`)
-      .then(res => res.json())
+      .then(res => safeJsonParse(res))
       .then(data => {
         if (data && data.success && Array.isArray(data.passengers) && data.passengers.length > 0) {
           const mapped = data.passengers.map((mp, idx) => ({

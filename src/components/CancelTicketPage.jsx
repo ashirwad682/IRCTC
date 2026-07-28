@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { API_BASE_URL } from '../config/api';
+import { API_BASE_URL, safeJsonParse } from '../config/api';
 import { XCircle, Search, ShieldCheck, AlertCircle, FileText, CheckCircle2, Clock, Train, User, DollarSign, ArrowRight, RefreshCcw, Info, Download, AlertTriangle, Lock, Printer, Loader2, Ticket } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -26,7 +26,7 @@ export default function CancelTicketPage({ userBookings = [], prefillPnr = null,
   useEffect(() => {
     if (currentUser?.username) {
       fetch(`${API_BASE_URL}/api/bookings/user/${encodeURIComponent(currentUser.username)}`)
-        .then(res => res.json())
+        .then(res => safeJsonParse(res))
         .then(data => {
           if (data && data.success && Array.isArray(data.bookings)) {
             setDbUserBookings(data.bookings);
@@ -179,7 +179,7 @@ STATUS: CANCELLED / REFUND INITIATED`;
       if (isTicketCancelled) {
         // Fetch the exact stored cancellation record from MongoDB (cancelledDate, cancelledTime, netRefund saved at cancel time)
         fetch(API_BASE_URL + '/api/cancellations/pnr/' + cleanPnr)
-          .then(r => r.json())
+          .then(r => safeJsonParse(r))
           .then(data => {
             const cRec = (data && data.success && data.cancellation) ? data.cancellation : null;
             const cDetails = match.cancellationDetails || {};
@@ -374,7 +374,7 @@ STATUS: CANCELLED / REFUND INITIATED`;
             cancelReason: cancelReason || 'Change of Travel Plan'
           })
         })
-        .then(r => r.json())
+        .then(r => safeJsonParse(r))
         .then(dbData => {
           // Update cancellationResult with exact date/time/refund from MongoDB response
           if (dbData && dbData.success && dbData.cancellation) {

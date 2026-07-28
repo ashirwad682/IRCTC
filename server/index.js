@@ -18,11 +18,17 @@ app.use(cors());
 app.use(express.json());
 
 let cachedConn = null;
+let lastConnFailTime = 0;
 
 // MongoDB Database Connection helper with pooling & Atlas cloud default for Serverless & Express
 export const connectDB = async () => {
   if (mongoose.connection.readyState === 1) {
     return mongoose.connection;
+  }
+
+  // Failure cooldown to prevent hanging serverless requests if DB is temporarily unreachable
+  if (Date.now() - lastConnFailTime < 10000) {
+    return null;
   }
 
   if (cachedConn) {
@@ -40,29 +46,35 @@ export const connectDB = async () => {
   const LOCAL_URI = 'mongodb://127.0.0.1:27017/irctc_db';
   const MONGO_URI = process.env.MONGO_URI || ATLAS_URI;
 
+  const isVercel = process.env.VERCEL === '1' || process.env.NODE_ENV === 'production';
+  const timeoutMs = isVercel ? 4000 : 8000;
+
   try {
     cachedConn = mongoose.connect(MONGO_URI, {
-      serverSelectionTimeoutMS: 15000,
-      connectTimeoutMS: 15000,
+      serverSelectionTimeoutMS: timeoutMs,
+      connectTimeoutMS: timeoutMs,
     });
     await cachedConn;
     console.log('✅ Connected to Primary Production MongoDB Database [irctc_db]');
     return mongoose.connection;
   } catch (err) {
-    console.warn('⚠️ Primary MongoDB Atlas connection failed, attempting fallback local connection...', err.message);
+    console.warn('⚠️ Primary MongoDB Atlas connection failed:', err.message);
     cachedConn = null;
-    try {
-      await mongoose.connect(LOCAL_URI, {
-        serverSelectionTimeoutMS: 3000,
-        connectTimeoutMS: 5000,
-      });
-      console.log('✅ Connected to Fallback Local MongoDB Database [irctc_db]');
-      return mongoose.connection;
-    } catch (localErr) {
-      console.error('❌ MongoDB Connection Warning:', localErr.message);
-      cachedConn = null;
-      throw localErr;
+    lastConnFailTime = Date.now();
+
+    if (!isVercel) {
+      try {
+        await mongoose.connect(LOCAL_URI, {
+          serverSelectionTimeoutMS: 3000,
+          connectTimeoutMS: 3000,
+        });
+        console.log('✅ Connected to Fallback Local MongoDB Database [irctc_db]');
+        return mongoose.connection;
+      } catch (localErr) {
+        console.error('❌ MongoDB Local Connection Warning:', localErr.message);
+      }
     }
+    return null;
   }
 };
 

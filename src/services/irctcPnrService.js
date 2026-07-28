@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../config/api';
+import { API_BASE_URL, safeJsonParse } from '../config/api';
 
 /**
  * Official IRCTC PNR Enquiry Client & Verification Service
@@ -17,7 +17,7 @@ export async function fetchOfficialIrctcPnrStatus(pnrNumber, userBookings = []) 
   try {
     const mongoRes = await fetch(`${API_BASE_URL}/api/bookings/pnr/${cleanPnr}`);
     if (mongoRes.ok) {
-      const mongoData = await mongoRes.json();
+      const mongoData = await safeJsonParse(mongoRes);
       if (mongoData && mongoData.success && mongoData.booking) {
         const b = mongoData.booking;
         const isCancelled = b.isCancelled || (b.passengers || []).every(p => String(p.status || p.berth || '').toUpperCase().includes('CAN'));
@@ -136,7 +136,7 @@ export async function fetchOfficialIrctcPnrStatus(pnrNumber, userBookings = []) 
   try {
     const mongoRes = await fetch(`${API_BASE_URL}/api/bookings/pnr/${cleanPnr}`);
     if (mongoRes.ok) {
-      const mongoData = await mongoRes.json();
+      const mongoData = await safeJsonParse(mongoRes);
       if (mongoData && mongoData.success && mongoData.booking) {
         const b = mongoData.booking;
         const isCancelled = b.isCancelled || (b.passengers || []).every(p => String(p.status || p.berth || '').toUpperCase().includes('CAN'));

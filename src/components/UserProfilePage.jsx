@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Users, ShieldCheck, KeyRound, Wallet, Edit3, ArrowLeft, Save, CheckCircle2, Ticket, Trash2, Plus, Eye, EyeOff, Lock, AlertCircle, Calendar } from 'lucide-react';
-import { API_BASE_URL } from '../config/api';
+import { API_BASE_URL, safeJsonParse } from '../config/api';
 import { STATIONS } from '../data/mockTrains';
 import BookedTicketHistoryPage from './BookedTicketHistoryPage';
 
@@ -78,7 +78,7 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
           address: profileData.address
         })
       });
-      const data = await res.json();
+      const data = await safeJsonParse(res);
       setIsSaving(false);
 
       if (res.ok && data && data.success && data.user) {
@@ -176,7 +176,7 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
         })
       });
 
-      const data = await res.json();
+      const data = await safeJsonParse(res);
       setIsChangingPass(false);
 
       if (res.ok && data && data.success) {
@@ -235,7 +235,7 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
   useEffect(() => {
     if (user?.username) {
       fetch(`${API_BASE_URL}/api/master-passengers/${user.username}`)
-        .then(res => res.json())
+        .then(res => safeJsonParse(res))
         .then(data => {
           if (data && data.success && Array.isArray(data.passengers)) {
             setMasterPassengers(data.passengers);
@@ -333,7 +333,7 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
           idNumber: newMasterIdNumber
         })
       });
-      const data = await res.json();
+      const data = await safeJsonParse(res);
       setIsAddingMaster(false);
 
       if (res.ok && data && data.success && Array.isArray(data.passengers)) {
@@ -396,7 +396,7 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
           passengerId
         })
       });
-      const data = await res.json();
+      const data = await safeJsonParse(res);
       if (res.ok && data && data.success && Array.isArray(data.passengers)) {
         setMasterPassengers(data.passengers);
         setMasterMsg('Passenger deleted from Master List');

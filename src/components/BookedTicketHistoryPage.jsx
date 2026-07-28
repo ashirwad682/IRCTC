@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { API_BASE_URL } from '../config/api';
+import { API_BASE_URL, safeJsonParse } from '../config/api';
 import { ArrowLeft, Printer, ChevronDown, ChevronUp, AlertCircle, FileText, CheckCircle2, XCircle, Train, RefreshCw, ShoppingBag, Hotel, Bus, Coffee, Trash2, IndianRupee, BadgeCheck, Clock, Download } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -22,7 +22,7 @@ export default function BookedTicketHistoryPage({ onBack, onViewTicket, onCancel
     if (currentUser?.username) {
       const cleanUser = String(currentUser.username).toLowerCase();
       fetch(`${API_BASE_URL}/api/bookings/user/${encodeURIComponent(currentUser.username)}`)
-        .then(res => res.json())
+        .then(res => safeJsonParse(res))
         .then(data => {
           if (data && data.success && Array.isArray(data.bookings)) {
             const ownBookings = data.bookings.filter(b =>
