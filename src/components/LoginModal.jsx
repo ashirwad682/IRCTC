@@ -45,6 +45,13 @@ export default function LoginModal({ onClose, onLoginSuccess, bookingNotice }) {
 
     const cleanUsername = username.trim().toLowerCase();
 
+    // Built-in demo accounts — always valid, client-side, regardless of DB state
+    const DEMO_ACCOUNTS = [
+      { username: 'ashirwad', password: 'ashirwad', fullName: 'ASHIRWAD KUMAR', email: 'ashirwad@irctc.gov.in', phone: '+91 98765 43210', walletBalance: 10000 },
+      { username: 'admin', password: 'admin', fullName: 'IRCTC SYSTEM ADMINISTRATOR', email: 'admin@irctc.gov.in', phone: '+91 99999 88888', walletBalance: 50000 }
+    ];
+    const demoAccount = DEMO_ACCOUNTS.find(u => u.username === cleanUsername);
+
     try {
       const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
@@ -84,27 +91,34 @@ export default function LoginModal({ onClose, onLoginSuccess, bookingNotice }) {
           isKycVerified: true
         });
         return;
-      } else if (data && (res.status === 400 || res.status === 401) && data.message) {
-        // Hard auth errors (wrong creds / not found) — show to user and stop
-        setIsSubmitting(false);
-        setErrorMsg(data.message);
-        return;
+      } else if (res.status === 401 && data && data.message) {
+        // Server found the user but rejected password.
+        // However, if this is a demo account and the demo password matches,
+        // the Atlas record may be stale — allow login via client-side demo credentials.
+        if (demoAccount && demoAccount.password === password) {
+          // fall through to demo account login below
+        } else {
+          setIsSubmitting(false);
+          setErrorMsg(data.message);
+          return;
+        }
+      } else if (res.status === 400 && data && data.message) {
+        // User not found in DB at all — also check demo/local fallback
+        if (!demoAccount) {
+          setIsSubmitting(false);
+          setErrorMsg(data.message);
+          return;
+        }
+        // else fall through to demo account check below
       }
-      // 503 or any other non-fatal server issue → fall through to local fallback below
+      // 503 / any other non-fatal server issue → fall through to local fallback below
     } catch (err) {
       console.warn("MongoDB login fetch notice:", err);
     }
 
-    // Built-in demo accounts (always available, even without DB / Vercel cold starts)
-    const DEMO_ACCOUNTS = [
-      { username: 'ashirwad', password: 'ashirwad', fullName: 'ASHIRWAD KUMAR', email: 'ashirwad@irctc.gov.in', phone: '+91 98765 43210', walletBalance: 10000 },
-      { username: 'admin', password: 'admin', fullName: 'IRCTC SYSTEM ADMINISTRATOR', email: 'admin@irctc.gov.in', phone: '+91 99999 88888', walletBalance: 50000 }
-    ];
-
-    // Network / Offline fallback: check demo accounts first, then local registered users
-    const demoMatch = DEMO_ACCOUNTS.find(u => u.username === cleanUsername);
+    // Offline / fallback: check demo accounts first, then local registered users
     const localReg = JSON.parse(localStorage.getItem('railx_registered_users') || '[]');
-    const matchUser = demoMatch || localReg.find(u => String(u.username).toLowerCase() === cleanUsername);
+    const matchUser = demoAccount || localReg.find(u => String(u.username).toLowerCase() === cleanUsername);
 
     setIsSubmitting(false);
     if (!matchUser) {

@@ -79,7 +79,7 @@ export const connectDB = async () => {
   }
 };
 
-// Auto-seed default demo accounts in MongoDB Atlas if missing
+// Auto-seed & sync default demo accounts in MongoDB Atlas (always force-update passwords)
 export const seedDefaultUsers = async () => {
   try {
     if (mongoose.connection.readyState !== 1) return;
@@ -103,21 +103,30 @@ export const seedDefaultUsers = async () => {
     ];
 
     for (const acc of defaultAccounts) {
-      const exists = await User.findOne({
-        $or: [{ username: acc.username }, { email: acc.email }]
-      });
-      if (!exists) {
-        await User.create({
-          ...acc,
-          gender: 'Male',
-          dob: '1998-05-15',
-          country: 'India',
-          address: 'New Delhi, India',
-          lastUsernameChangeAt: new Date(),
-          lastPasswordChangeAt: new Date()
-        });
-        console.log(`[MongoDB Atlas] Auto-seeded default account: ${acc.username}`);
-      }
+      // Use upsert so the account is ALWAYS created/updated with the correct password
+      // This fixes the case where Atlas has the account but with a stale/wrong password
+      await User.findOneAndUpdate(
+        { username: acc.username },
+        {
+          $set: {
+            password: acc.password,
+            email: acc.email,
+            fullName: acc.fullName,
+            phone: acc.phone
+          },
+          $setOnInsert: {
+            gender: 'Male',
+            dob: '1998-05-15',
+            country: 'India',
+            address: 'New Delhi, India',
+            walletBalance: acc.walletBalance,
+            lastUsernameChangeAt: new Date(),
+            lastPasswordChangeAt: new Date()
+          }
+        },
+        { upsert: true, new: true }
+      );
+      console.log(`[MongoDB Atlas] Demo account synced: ${acc.username}`);
     }
   } catch (err) {
     console.warn('Auto-seed default accounts notice:', err.message);
