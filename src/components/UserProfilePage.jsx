@@ -1,8 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { User, Users, ShieldCheck, KeyRound, Wallet, Edit3, ArrowLeft, Save, CheckCircle2, Ticket, Trash2, Plus, Eye, EyeOff, Lock, AlertCircle, Calendar } from 'lucide-react';
+import { User, Users, ShieldCheck, KeyRound, Wallet, Edit3, ArrowLeft, Save, CheckCircle2, Ticket, Trash2, Plus, Eye, EyeOff, Lock, AlertCircle, Calendar, MapPin, Home, Building, Compass } from 'lucide-react';
 import { API_BASE_URL, safeJsonParse } from '../config/api';
 import { STATIONS } from '../data/mockTrains';
 import BookedTicketHistoryPage from './BookedTicketHistoryPage';
+
+const INDIAN_STATES = [
+  'Andaman and Nicobar Islands', 'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar',
+  'Chandigarh', 'Chhattisgarh', 'Dadra and Nagar Haveli and Daman and Diu', 'Delhi',
+  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jammu and Kashmir', 'Jharkhand',
+  'Karnataka', 'Kerala', 'Ladakh', 'Lakshadweep', 'Madhya Pradesh', 'Maharashtra',
+  'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Puducherry', 'Punjab',
+  'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh',
+  'Uttarakhand', 'West Bengal'
+];
 
 export default function UserProfilePage({ user, onLogout, onBackToSearch, onViewTicket, onOpenBookedTickets, activeTabMode = 'profile', userBookings = [], onUpdateUser }) {
   if (!user) {
@@ -42,6 +52,13 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
     address: user?.address || ''
   });
 
+  // Structured Residential Address State
+  const [addrFlat, setAddrFlat] = useState('');
+  const [addrStreet, setAddrStreet] = useState('');
+  const [addrPincode, setAddrPincode] = useState('');
+  const [addrCity, setAddrCity] = useState('');
+  const [addrState, setAddrState] = useState('');
+
   useEffect(() => {
     if (user) {
       setProfileData({
@@ -56,6 +73,37 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
       });
     }
   }, [user]);
+
+  const handleAddressFieldChange = (field, value) => {
+    let f = addrFlat;
+    let s = addrStreet;
+    let p = addrPincode;
+    let c = addrCity;
+    let st = addrState;
+
+    if (field === 'flat') f = value;
+    if (field === 'street') s = value;
+    if (field === 'pincode') p = value;
+    if (field === 'city') c = value;
+    if (field === 'state') st = value;
+
+    setAddrFlat(f);
+    setAddrStreet(s);
+    setAddrPincode(p);
+    setAddrCity(c);
+    setAddrState(st);
+
+    const parts = [
+      f.trim(),
+      s.trim(),
+      c.trim(),
+      p.trim() ? `PIN: ${p.trim()}` : null,
+      st.trim(),
+      profileData.country || 'India'
+    ].filter(Boolean);
+
+    setProfileData(prev => ({ ...prev, address: parts.join(', ') }));
+  };
 
   const handleSaveProfile = async (e) => {
     if (e) e.preventDefault();
@@ -669,18 +717,109 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
                   </div>
                 </div>
 
-                {/* 7. Residential Address */}
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-start">
-                  <label className="sm:col-span-4 text-slate-700 font-extrabold text-xs pt-2">
-                    Residential Address:
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={profileData.address}
-                    onChange={(e) => setProfileData({ ...profileData, address: e.target.value })}
-                    placeholder="Enter Full Residential Address"
-                    className="sm:col-span-8 px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white font-bold text-xs text-slate-900 focus:outline-none focus:border-[#000066]"
-                  />
+                {/* 7. Enhanced Professional Residential Address Section */}
+                <div className="border-t border-slate-200/80 pt-5 mt-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-[#000066]/10 text-[#000066] flex items-center justify-center font-bold shrink-0">
+                      <MapPin className="w-4 h-4 text-[#000066]" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black text-[#000066] uppercase tracking-wider">Residential & Correspondence Address</h3>
+                      <p className="text-[11px] font-bold text-slate-500">Provide official residential details as per valid government ID proof</p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-3">
+                    {/* Line 1: Flat / Door / House No. & Building */}
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                      <label className="sm:col-span-4 text-slate-700 font-extrabold text-xs flex items-center gap-1.5">
+                        <Home className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>Flat / Door / House No. & Building:</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={addrFlat}
+                        onChange={(e) => handleAddressFieldChange('flat', e.target.value)}
+                        placeholder="e.g. Flat 402, Block B, Sunshine Apartments"
+                        className="sm:col-span-8 px-3.5 py-2 rounded-xl border border-slate-300 bg-white font-bold text-xs text-slate-900 focus:outline-none focus:border-[#000066]"
+                      />
+                    </div>
+
+                    {/* Line 2: Street / Area / Locality */}
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                      <label className="sm:col-span-4 text-slate-700 font-extrabold text-xs flex items-center gap-1.5">
+                        <Building className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>Street / Locality / Area:</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={addrStreet}
+                        onChange={(e) => handleAddressFieldChange('street', e.target.value)}
+                        placeholder="e.g. MG Road, Near Civil Hospital"
+                        className="sm:col-span-8 px-3.5 py-2 rounded-xl border border-slate-300 bg-white font-bold text-xs text-slate-900 focus:outline-none focus:border-[#000066]"
+                      />
+                    </div>
+
+                    {/* Line 3: Pincode, City, State Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                      <div>
+                        <label className="block text-[11px] font-extrabold text-slate-700 mb-1">
+                          PIN Code <span className="text-rose-600">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={6}
+                          value={addrPincode}
+                          onChange={(e) => handleAddressFieldChange('pincode', e.target.value.replace(/\D/g, ''))}
+                          placeholder="e.g. 110001"
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-mono font-bold text-xs text-slate-900 focus:outline-none focus:border-[#000066]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-extrabold text-slate-700 mb-1">
+                          City / District
+                        </label>
+                        <input
+                          type="text"
+                          value={addrCity}
+                          onChange={(e) => handleAddressFieldChange('city', e.target.value)}
+                          placeholder="e.g. New Delhi"
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-xs text-slate-900 focus:outline-none focus:border-[#000066]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-extrabold text-slate-700 mb-1">
+                          State / Union Territory
+                        </label>
+                        <select
+                          value={addrState}
+                          onChange={(e) => handleAddressFieldChange('state', e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-xs text-slate-900 focus:outline-none focus:border-[#000066]"
+                        >
+                          <option value="">Select State</option>
+                          {INDIAN_STATES.map(st => (
+                            <option key={st} value={st}>{st}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Full Formatted Address Text */}
+                    <div className="pt-2 border-t border-slate-200/80">
+                      <label className="block text-[11px] font-extrabold text-slate-700 mb-1 flex items-center justify-between">
+                        <span>Full Composed Address (Preview / Custom Edit):</span>
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={profileData.address}
+                        onChange={(e) => setProfileData({ ...profileData, address: e.target.value })}
+                        placeholder="Enter or refine full residential address"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white font-bold text-xs text-slate-900 focus:outline-none focus:border-[#000066]"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Save & Cancel Buttons */}
@@ -755,11 +894,24 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-start">
-                  <span className="sm:col-span-4 text-slate-500 font-bold">Residential Address:</span>
-                  <span className="sm:col-span-8 text-slate-900">
-                    {profileData.address || <span className="text-slate-400 font-normal italic">Not Provided</span>}
-                  </span>
+                {/* Enhanced Residential Address Card Display */}
+                <div className="border-t border-slate-200/80 pt-4 mt-3">
+                  <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-50 via-blue-50/20 to-slate-50 border border-slate-200 flex items-start gap-3.5 shadow-2xs">
+                    <div className="w-9 h-9 rounded-xl bg-[#000066] text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <MapPin className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-1 flex-1">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <span className="text-xs font-black text-[#000066] uppercase tracking-wider">Verified Residential Address</span>
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-black text-[10px] border border-emerald-200 flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Official Profile Address
+                        </span>
+                      </div>
+                      <p className="text-xs font-black text-slate-800 leading-relaxed pt-0.5">
+                        {profileData.address || <span className="text-slate-400 font-normal italic">No residential address provided yet. Click "Edit Profile" to add your official correspondence address.</span>}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
