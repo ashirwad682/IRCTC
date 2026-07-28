@@ -107,6 +107,13 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
 
   const handleSaveProfile = async (e) => {
     if (e) e.preventDefault();
+
+    // Validate mobile: if provided, must be exactly 10 digits
+    if (profileData.mobile && profileData.mobile.replace(/\D/g, '').length !== 10) {
+      setSaveErrorMsg('⚠️ Mobile number must be exactly 10 digits.');
+      return;
+    }
+
     setIsSaving(true);
     setSaveSuccessMsg('');
     setSaveErrorMsg('');
@@ -697,17 +704,42 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
                 </div>
 
                 {/* 4. ISD-Mobile */}
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
-                  <label className="sm:col-span-4 text-slate-700 font-extrabold text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-start">
+                  <label className="sm:col-span-4 text-slate-700 font-extrabold text-xs pt-2.5">
                     ISD-Mobile:
                   </label>
-                  <input
-                    type="tel"
-                    value={profileData.mobile}
-                    onChange={(e) => setProfileData({ ...profileData, mobile: e.target.value })}
-                    placeholder="Enter 10-Digit Mobile Number"
-                    className="sm:col-span-8 px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white font-bold text-xs text-slate-900 focus:outline-none focus:border-[#000066]"
-                  />
+                  <div className="sm:col-span-8 flex flex-col gap-1">
+                    <input
+                      type="tel"
+                      value={profileData.mobile}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        setProfileData({ ...profileData, mobile: digits });
+                      }}
+                      placeholder="Enter 10-Digit Mobile Number"
+                      maxLength={10}
+                      className={`w-full px-3.5 py-2.5 rounded-xl border bg-white font-bold text-xs text-slate-900 focus:outline-none transition-colors ${
+                        profileData.mobile && profileData.mobile.length === 10
+                          ? 'border-emerald-400 focus:border-emerald-500'
+                          : profileData.mobile && profileData.mobile.length > 0
+                          ? 'border-red-400 focus:border-red-500'
+                          : 'border-slate-300 focus:border-[#000066]'
+                      }`}
+                    />
+                    <div className="flex items-center justify-between px-1">
+                      {profileData.mobile && profileData.mobile.length > 0 && profileData.mobile.length < 10 && (
+                        <span className="text-[10px] font-bold text-red-500">
+                          ✗ {10 - profileData.mobile.length} more digit{10 - profileData.mobile.length !== 1 ? 's' : ''} required
+                        </span>
+                      )}
+                      {profileData.mobile && profileData.mobile.length === 10 && (
+                        <span className="text-[10px] font-bold text-emerald-600">✓ Valid 10-digit number</span>
+                      )}
+                      <span className={`text-[10px] font-bold ml-auto ${profileData.mobile?.length === 10 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        {profileData.mobile?.length || 0}/10
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* 5. Country */}
