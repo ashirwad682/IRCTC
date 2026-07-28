@@ -5,41 +5,52 @@ import { API_BASE_URL, safeJsonParse } from '../config/api';
 
 export default function PassengerDetailsModal({ user, train, selectedClass, selectedSeats: initialSeats, quota: passedQuota, journeyDate: passedJourneyDate, onClose, onProceedToPayment }) {
   const journeyDate = passedJourneyDate || train?.journeyDate || '';
-  // Dynamic Master List sourcing from localStorage or default master list
+  // Dynamic Master List sourcing strictly scoped to active user profile
   const getInitialMasterList = () => {
-    try {
-      const stored = localStorage.getItem('railx_master_passengers');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((item, idx) => ({
-            id: item.id ? String(item.id) : `m${idx + 1}`,
-            name: item.name?.toUpperCase() || 'PASSENGER',
-            age: item.age || 25,
-            gender: item.gender || 'Male',
-            nationality: 'IN',
-            berth: item.berth || 'No preference',
-            food: item.meal?.includes('Veg') || item.meal?.includes('VEG') ? 'VEG' : 'NO_FOOD',
-            verified: item.status === 'Verified' || item.name?.includes('ASHIRWAD')
-          }));
-        }
+    const savedUser = user || (() => {
+      try {
+        const u = localStorage.getItem('railx_current_user');
+        return u ? JSON.parse(u) : null;
+      } catch (e) {
+        return null;
       }
-    } catch (e) {
-      console.error('Error parsing master list:', e);
+    })();
+
+    const activeUsername = savedUser?.username ? String(savedUser.username).toLowerCase().trim() : '';
+
+    if (activeUsername) {
+      try {
+        const stored = localStorage.getItem(`railx_master_passengers_${activeUsername}`);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map((item, idx) => ({
+              id: item.id ? String(item.id) : `m${idx + 1}`,
+              name: item.name?.toUpperCase() || 'PASSENGER',
+              age: item.age || 25,
+              dob: item.dob || '',
+              gender: item.gender || 'Male',
+              nationality: 'IN',
+              berth: item.berth || 'No preference',
+              food: item.meal?.toUpperCase().includes('VEG') ? 'VEG' : (item.meal || 'NO_FOOD'),
+              idType: item.idType || 'AADHAR ID/VIRTUAL ID',
+              idNumber: item.idNumber || '',
+              verified: item.status === 'Verified'
+            }));
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing master list:', e);
+      }
     }
 
-    return [
-      { id: 'm1', name: 'ASHIRWAD KUMAR', age: 21, gender: 'Male', nationality: 'IN', berth: 'No preference', food: 'VEG', verified: true },
-      { id: 'm2', name: 'ASHISH KUMAR', age: 19, gender: 'Male', nationality: 'IN', berth: 'Lower', food: 'NO_FOOD', verified: false },
-      { id: 'm3', name: 'BALRAM CHOUDHARY', age: 60, gender: 'Male', nationality: 'IN', berth: 'Lower', food: 'NO_FOOD', verified: false },
-      { id: 'm4', name: 'HARSH CHOUDHARY', age: 16, gender: 'Male', nationality: 'IN', berth: 'Lower', food: 'NO_FOOD', verified: false },
-      { id: 'm5', name: 'SHOBHA DEVI', age: 53, gender: 'Female', nationality: 'IN', berth: 'Lower', food: 'NO_FOOD', verified: false }
-    ];
+    // Strictly return empty list if user has no master list. DO NOT show any demo/dummy list!
+    return [];
   };
 
   const [masterPassengersList, setMasterPassengersList] = useState(getInitialMasterList);
 
-  // Sourcing User's Master Passengers directly from MongoDB Atlas Database
+  // Sourcing User's Master Passengers directly from MongoDB Atlas Database for active account
   useEffect(() => {
     const savedUser = user || (() => {
       try {
@@ -50,11 +61,17 @@ export default function PassengerDetailsModal({ user, train, selectedClass, sele
       }
     })();
 
-    const activeUsername = savedUser?.username || 'ashirwad';
+    const activeUsername = savedUser?.username ? String(savedUser.username).toLowerCase().trim() : '';
+
+    if (!activeUsername) {
+      setMasterPassengersList([]);
+      return;
+    }
+
     fetch(`${API_BASE_URL}/api/master-passengers/${activeUsername}`)
       .then(res => safeJsonParse(res))
       .then(data => {
-        if (data && data.success && Array.isArray(data.passengers) && data.passengers.length > 0) {
+        if (data && data.success && Array.isArray(data.passengers)) {
           const mapped = data.passengers.map((mp, idx) => ({
             id: mp.id || `m_${idx}`,
             name: mp.name?.toUpperCase() || 'PASSENGER',
@@ -69,9 +86,37 @@ export default function PassengerDetailsModal({ user, train, selectedClass, sele
             verified: mp.status === 'Verified'
           }));
           setMasterPassengersList(mapped);
+          localStorage.setItem(`railx_master_passengers_${activeUsername}`, JSON.stringify(data.passengers));
+        } else {
+          setMasterPassengersList([]);
         }
       })
-      .catch(err => console.warn('MongoDB Master list fetch notice:', err));
+      .catch(err => {
+        console.warn('MongoDB Master list fetch notice:', err);
+        try {
+          const stored = localStorage.getItem(`railx_master_passengers_${activeUsername}`);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+              setMasterPassengersList(parsed.map((mp, idx) => ({
+                id: mp.id || `m_${idx}`,
+                name: mp.name?.toUpperCase() || 'PASSENGER',
+                age: mp.age || 25,
+                dob: mp.dob || '',
+                gender: mp.gender || 'Male',
+                nationality: 'IN',
+                berth: mp.berth || 'No preference',
+                food: mp.meal?.toUpperCase().includes('VEG') ? 'VEG' : (mp.meal || 'NO_FOOD'),
+                idType: mp.idType || 'AADHAR ID/VIRTUAL ID',
+                idNumber: mp.idNumber || '',
+                verified: mp.status === 'Verified'
+              })));
+              return;
+            }
+          }
+        } catch (e) {}
+        setMasterPassengersList([]);
+      });
   }, [user?.username]);
 
   const refreshMasterList = () => {
@@ -84,11 +129,16 @@ export default function PassengerDetailsModal({ user, train, selectedClass, sele
       }
     })();
 
-    const activeUsername = savedUser?.username || 'ashirwad';
+    const activeUsername = savedUser?.username ? String(savedUser.username).toLowerCase().trim() : '';
+    if (!activeUsername) {
+      setMasterPassengersList([]);
+      return;
+    }
+
     fetch(`${API_BASE_URL}/api/master-passengers/${activeUsername}`)
       .then(res => safeJsonParse(res))
       .then(data => {
-        if (data && data.success && Array.isArray(data.passengers) && data.passengers.length > 0) {
+        if (data && data.success && Array.isArray(data.passengers)) {
           const mapped = data.passengers.map((mp, idx) => ({
             id: mp.id || `m_${idx}`,
             name: mp.name?.toUpperCase() || 'PASSENGER',
@@ -103,6 +153,9 @@ export default function PassengerDetailsModal({ user, train, selectedClass, sele
             verified: mp.status === 'Verified'
           }));
           setMasterPassengersList(mapped);
+          localStorage.setItem(`railx_master_passengers_${activeUsername}`, JSON.stringify(data.passengers));
+        } else {
+          setMasterPassengersList([]);
         }
       })
       .catch(() => {});

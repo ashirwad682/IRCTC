@@ -279,17 +279,28 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
   const [newMasterIdType, setNewMasterIdType] = useState('AADHAR ID/VIRTUAL ID');
   const [newMasterIdNumber, setNewMasterIdNumber] = useState('');
 
-  // Fetch Master List Passengers from MongoDB Database
+  // Fetch Master List Passengers from MongoDB Database (Strictly scoped to user profile)
   useEffect(() => {
     if (user?.username) {
-      fetch(`${API_BASE_URL}/api/master-passengers/${user.username}`)
+      const cleanUsername = String(user.username).toLowerCase().trim();
+      fetch(`${API_BASE_URL}/api/master-passengers/${cleanUsername}`)
         .then(res => safeJsonParse(res))
         .then(data => {
           if (data && data.success && Array.isArray(data.passengers)) {
             setMasterPassengers(data.passengers);
+            localStorage.setItem(`railx_master_passengers_${cleanUsername}`, JSON.stringify(data.passengers));
+          } else {
+            const stored = localStorage.getItem(`railx_master_passengers_${cleanUsername}`);
+            setMasterPassengers(stored ? JSON.parse(stored) : []);
           }
         })
-        .catch(err => console.warn('Fetch master list notice:', err));
+        .catch(err => {
+          console.warn('Fetch master list notice:', err);
+          const stored = localStorage.getItem(`railx_master_passengers_${cleanUsername}`);
+          setMasterPassengers(stored ? JSON.parse(stored) : []);
+        });
+    } else {
+      setMasterPassengers([]);
     }
   }, [user?.username, activeSubTab]);
 
@@ -386,6 +397,8 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
 
       if (res.ok && data && data.success && Array.isArray(data.passengers)) {
         setMasterPassengers(data.passengers);
+        const cleanUsername = String(user.username).toLowerCase().trim();
+        localStorage.setItem(`railx_master_passengers_${cleanUsername}`, JSON.stringify(data.passengers));
         setMasterMsg(editingPassengerId ? '🎉 Passenger updated in Master List successfully!' : '🎉 Passenger added to Master List successfully!');
         handleResetMasterForm();
         return;
@@ -398,19 +411,24 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
     }
 
     setIsAddingMaster(false);
+    const cleanUsername = String(user.username).toLowerCase().trim();
     // Offline fallback
     if (editingPassengerId) {
-      setMasterPassengers(prev => prev.map(m => m.id === editingPassengerId ? {
-        ...m,
-        passengerType: masterType,
-        name: newMasterName.toUpperCase(),
-        dob: newMasterDob,
-        gender: newMasterGender,
-        berth: newMasterBerth,
-        meal: newMasterMeal,
-        idType: newMasterIdType,
-        idNumber: newMasterIdNumber
-      } : m));
+      setMasterPassengers(prev => {
+        const updated = prev.map(m => m.id === editingPassengerId ? {
+          ...m,
+          passengerType: masterType,
+          name: newMasterName.toUpperCase(),
+          dob: newMasterDob,
+          gender: newMasterGender,
+          berth: newMasterBerth,
+          meal: newMasterMeal,
+          idType: newMasterIdType,
+          idNumber: newMasterIdNumber
+        } : m);
+        localStorage.setItem(`railx_master_passengers_${cleanUsername}`, JSON.stringify(updated));
+        return updated;
+      });
       setMasterMsg('🎉 Passenger updated in Master List successfully!');
     } else {
       const offlinePass = {
@@ -427,7 +445,11 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
         idType: newMasterIdType,
         idNumber: newMasterIdNumber
       };
-      setMasterPassengers(prev => [...prev, offlinePass]);
+      setMasterPassengers(prev => {
+        const updated = [...prev, offlinePass];
+        localStorage.setItem(`railx_master_passengers_${cleanUsername}`, JSON.stringify(updated));
+        return updated;
+      });
       setMasterMsg('🎉 Passenger added to Master List successfully!');
     }
     handleResetMasterForm();
@@ -435,6 +457,7 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
 
   const handleDeleteMaster = async (passengerId) => {
     setMasterMsg('');
+    const cleanUsername = String(user.username).toLowerCase().trim();
     try {
       const res = await fetch(`${API_BASE_URL}/api/master-passengers/delete`, {
         method: 'DELETE',
@@ -447,13 +470,18 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
       const data = await safeJsonParse(res);
       if (res.ok && data && data.success && Array.isArray(data.passengers)) {
         setMasterPassengers(data.passengers);
+        localStorage.setItem(`railx_master_passengers_${cleanUsername}`, JSON.stringify(data.passengers));
         setMasterMsg('Passenger deleted from Master List');
         return;
       }
     } catch (err) {
       console.warn('Delete master notice:', err);
     }
-    setMasterPassengers(prev => prev.filter(m => m.id !== passengerId));
+    setMasterPassengers(prev => {
+      const updated = prev.filter(m => m.id !== passengerId);
+      localStorage.setItem(`railx_master_passengers_${cleanUsername}`, JSON.stringify(updated));
+      return updated;
+    });
     setMasterMsg('Passenger deleted from Master List');
   };
 
