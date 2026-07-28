@@ -709,23 +709,32 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
                     ISD-Mobile:
                   </label>
                   <div className="sm:col-span-8 flex flex-col gap-1">
-                    <input
-                      type="tel"
-                      value={profileData.mobile}
-                      onChange={(e) => {
-                        const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
-                        setProfileData({ ...profileData, mobile: digits });
-                      }}
-                      placeholder="Enter 10-Digit Mobile Number"
-                      maxLength={10}
-                      className={`w-full px-3.5 py-2.5 rounded-xl border bg-white font-bold text-xs text-slate-900 focus:outline-none transition-colors ${
-                        profileData.mobile && profileData.mobile.length === 10
-                          ? 'border-emerald-400 focus:border-emerald-500'
-                          : profileData.mobile && profileData.mobile.length > 0
-                          ? 'border-red-400 focus:border-red-500'
-                          : 'border-slate-300 focus:border-[#000066]'
-                      }`}
-                    />
+                    <div className={`flex items-center rounded-xl border bg-white overflow-hidden transition-colors ${
+                      profileData.mobile && profileData.mobile.length === 10
+                        ? 'border-emerald-400 focus-within:border-emerald-500'
+                        : profileData.mobile && profileData.mobile.length > 0
+                        ? 'border-red-400 focus-within:border-red-500'
+                        : 'border-slate-300 focus-within:border-[#000066]'
+                    }`}>
+                      <div className="bg-slate-100 px-3 py-2.5 border-r border-slate-200 text-xs font-black text-slate-700 flex items-center gap-1.5 select-none shrink-0">
+                        <span>🇮🇳</span>
+                        <span>+91</span>
+                      </div>
+                      <input
+                        type="tel"
+                        value={profileData.mobile}
+                        onChange={(e) => {
+                          let val = e.target.value;
+                          if (val.startsWith('+91')) val = val.slice(3);
+                          if (val.startsWith('91') && val.length > 10) val = val.slice(2);
+                          const digits = val.replace(/\D/g, '').slice(0, 10);
+                          setProfileData({ ...profileData, mobile: digits });
+                        }}
+                        placeholder="Enter 10-digit mobile number"
+                        maxLength={10}
+                        className="w-full px-3 py-2.5 bg-transparent font-mono font-bold text-xs text-slate-900 focus:outline-none"
+                      />
+                    </div>
                     <div className="flex items-center justify-between px-1">
                       {profileData.mobile && profileData.mobile.length > 0 && profileData.mobile.length < 10 && (
                         <span className="text-[10px] font-bold text-red-500">
@@ -733,7 +742,7 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
                         </span>
                       )}
                       {profileData.mobile && profileData.mobile.length === 10 && (
-                        <span className="text-[10px] font-bold text-emerald-600">✓ Valid 10-digit number</span>
+                        <span className="text-[10px] font-bold text-emerald-600">✓ Valid 10-digit mobile (+91)</span>
                       )}
                       <span className={`text-[10px] font-bold ml-auto ${profileData.mobile?.length === 10 ? 'text-emerald-600' : 'text-slate-400'}`}>
                         {profileData.mobile?.length || 0}/10
@@ -928,8 +937,15 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
 
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
                   <span className="sm:col-span-4 text-slate-500 font-bold">ISD-Mobile:</span>
-                  <span className="sm:col-span-8 font-mono text-slate-900">
-                    {profileData.mobile || <span className="text-slate-400 font-normal italic font-sans">Not Provided</span>}
+                  <span className="sm:col-span-8 font-mono font-bold text-slate-900 flex items-center gap-1">
+                    {profileData.mobile ? (
+                      <>
+                        <span className="text-slate-500 font-normal">+91</span>
+                        <span>{profileData.mobile.replace(/^\+?91/, '')}</span>
+                      </>
+                    ) : (
+                      <span className="text-slate-400 font-normal italic font-sans">Not Provided</span>
+                    )}
                   </span>
                 </div>
 
