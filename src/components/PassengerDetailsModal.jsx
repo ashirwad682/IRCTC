@@ -200,13 +200,30 @@ export default function PassengerDetailsModal({ user, train, selectedClass, sele
       .catch(() => {});
   };
 
-  // Workflow step: 'input' (Step 1) vs 'review' (Step 2: Non-editable Fare & Seat Review)
-  const [step, setStep] = useState('input');
+  // Workflow step & Form State Persistence (survives Cmd+R / F5 refresh!)
+  const [step, setStep] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('railx_passenger_modal_state');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.step) return parsed.step;
+      }
+    } catch (e) {}
+    return 'input';
+  });
 
-  // Passenger Manifest State (Max 6) - Starts BLANK for fresh passenger input
-  const [passengers, setPassengers] = useState([
-    { id: 1, name: '', age: '', gender: 'Male', berth: 'No preference', food: 'VEG' }
-  ]);
+  const [passengers, setPassengers] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('railx_passenger_modal_state');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed.passengers) && parsed.passengers.length > 0) {
+          return parsed.passengers;
+        }
+      }
+    } catch (e) {}
+    return [{ id: 1, name: '', age: '', gender: 'Male', berth: 'No preference', food: 'VEG' }];
+  });
 
   // Modal controls
   const [showExistingPassengerModal, setShowExistingPassengerModal] = useState(false);
@@ -214,15 +231,112 @@ export default function PassengerDetailsModal({ user, train, selectedClass, sele
   const [showBoardingSelector, setShowBoardingSelector] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
 
-  // Inputs state
-  const [alternateMobile, setAlternateMobile] = useState('');
-  const [autoUpgrade, setAutoUpgrade] = useState(false);
-  const [confirmBerthOnly, setConfirmBerthOnly] = useState(false);
-  const [travelInsurance, setTravelInsurance] = useState(true);
-  const [reservationChoice, setReservationChoice] = useState('NONE');
-  const [preferredCoach, setPreferredCoach] = useState('');
-  const [gstNumber, setGstNumber] = useState('');
-  const [paymentMode, setPaymentMode] = useState('cards'); // 'cards' or 'upi'
+  // Inputs state (persisted across refresh)
+  const [alternateMobile, setAlternateMobile] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('railx_passenger_modal_state');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.alternateMobile !== undefined) return parsed.alternateMobile;
+      }
+    } catch (e) {}
+    return '';
+  });
+
+  const [autoUpgrade, setAutoUpgrade] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('railx_passenger_modal_state');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.autoUpgrade !== undefined) return parsed.autoUpgrade;
+      }
+    } catch (e) {}
+    return false;
+  });
+
+  const [confirmBerthOnly, setConfirmBerthOnly] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('railx_passenger_modal_state');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.confirmBerthOnly !== undefined) return parsed.confirmBerthOnly;
+      }
+    } catch (e) {}
+    return false;
+  });
+
+  const [travelInsurance, setTravelInsurance] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('railx_passenger_modal_state');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.travelInsurance !== undefined) return parsed.travelInsurance;
+      }
+    } catch (e) {}
+    return true;
+  });
+
+  const [reservationChoice, setReservationChoice] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('railx_passenger_modal_state');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.reservationChoice !== undefined) return parsed.reservationChoice;
+      }
+    } catch (e) {}
+    return 'NONE';
+  });
+
+  const [preferredCoach, setPreferredCoach] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('railx_passenger_modal_state');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.preferredCoach !== undefined) return parsed.preferredCoach;
+      }
+    } catch (e) {}
+    return '';
+  });
+
+  const [gstNumber, setGstNumber] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('railx_passenger_modal_state');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.gstNumber !== undefined) return parsed.gstNumber;
+      }
+    } catch (e) {}
+    return '';
+  });
+
+  const [paymentMode, setPaymentMode] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('railx_passenger_modal_state');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.paymentMode !== undefined) return parsed.paymentMode;
+      }
+    } catch (e) {}
+    return 'cards';
+  });
+
+  // Save all passenger form inputs to sessionStorage whenever changed
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('railx_passenger_modal_state', JSON.stringify({
+        step,
+        passengers,
+        alternateMobile,
+        autoUpgrade,
+        confirmBerthOnly,
+        travelInsurance,
+        reservationChoice,
+        preferredCoach,
+        gstNumber,
+        paymentMode
+      }));
+    } catch (e) {}
+  }, [step, passengers, alternateMobile, autoUpgrade, confirmBerthOnly, travelInsurance, reservationChoice, preferredCoach, gstNumber, paymentMode]);
 
   // Train & Route variables
   const trainName = train?.name || 'PASCHIM SUPERFAST EXPRESS';

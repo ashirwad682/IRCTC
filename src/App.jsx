@@ -194,12 +194,38 @@ export default function App() {
   const [confirmationClass, setConfirmationClass] = useState(null);
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
 
-  // Passenger Details & Payment Gateway Modals
-  const [bookingRequestData, setBookingRequestData] = useState(null);
-  const [showPassengerModal, setShowPassengerModal] = useState(false);
+  // Passenger Details & Payment Gateway Modals (Persisted in sessionStorage so Cmd+R / F5 refresh stays on booking screen!)
+  const [bookingRequestData, setBookingRequestData] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('railx_booking_request_data');
+      return stored ? JSON.parse(stored) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+  const [showPassengerModal, setShowPassengerModal] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('railx_show_passenger_modal');
+      return stored === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+
+  // Persist passenger booking modal state across refresh
+  useEffect(() => {
+    try {
+      if (bookingRequestData) {
+        sessionStorage.setItem('railx_booking_request_data', JSON.stringify(bookingRequestData));
+      } else {
+        sessionStorage.removeItem('railx_booking_request_data');
+      }
+      sessionStorage.setItem('railx_show_passenger_modal', showPassengerModal ? 'true' : 'false');
+    } catch (e) {}
+  }, [bookingRequestData, showPassengerModal]);
 
   // Other Modals
   const [showAIModal, setShowAIModal] = useState(false);
