@@ -235,9 +235,15 @@ export default function StationAutocomplete({ label, selectedCode, onSelectStati
               setHighlightedIndex(0);
             }}
             onKeyDown={handleKeyDown}
-            placeholder={label === 'From' ? 'Enter Source Station (e.g. NDLS)' : 'Enter Destination Station (e.g. MMCT)'}
+            placeholder={label && label.toLowerCase().includes('from') ? 'Enter Source Station' : 'Enter Destination Station'}
             className="w-full bg-transparent font-black text-blue-950 text-xs sm:text-sm focus:outline-none placeholder:text-slate-400 font-semibold"
           />
+
+          <div className="text-slate-400 shrink-0 pointer-events-none pr-1">
+            <svg className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180 text-blue-600' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
         </div>
       </div>
 

@@ -269,32 +269,33 @@ SECURITY SIGNATURE: IRCTC_VERIFIED_0x${pnrNo}`;
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
             <span>{emailSentToast}</span>
           </div>
-        )}
-
-        {/* Modal Top Actions Bar */}
-        <div className="px-4 sm:px-6 py-3 bg-[#0026cd] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-blue-900 shrink-0">
+        )}        {/* Modal Top Actions Bar */}
+        <div className="px-3 sm:px-6 py-3 bg-[#0026cd] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-blue-900 shrink-0">
           
-          <div className="flex items-center gap-2 text-xs font-black text-amber-300">
-            <ShieldCheck className="w-4.5 h-4.5 text-emerald-400 shrink-0" />
-            <span className="truncate">ELECTRONIC RESERVATION SLIP (ERS) • 1-PAGE A4 E-TICKET</span>
+          <div className="flex items-center justify-between gap-2 text-xs font-black text-amber-300">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4.5 h-4.5 text-emerald-400 shrink-0" />
+              <span className="text-[11px] sm:text-xs font-black tracking-tight">ELECTRONIC RESERVATION SLIP (ERS) • 1-PAGE A4</span>
+            </div>
+            <button onClick={onClose} className="sm:hidden p-1 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer">
+              <X className="w-4 h-4" />
+            </button>
           </div>
 
           {/* Action Buttons Bar */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 overflow-x-auto max-w-full flex-nowrap scrollbar-none pb-0.5 sm:pb-0">
             
-
-
             {/* Email Ticket Button */}
             <button
               onClick={handleSendEmail}
               disabled={sendingEmail}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-black transition-all shadow-md active:scale-95 cursor-pointer disabled:opacity-75"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-black transition-all shadow-md active:scale-95 cursor-pointer disabled:opacity-75 whitespace-nowrap shrink-0"
               title="Resend ticket PDF & PNR to email"
             >
               {sendingEmail ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Sending Mail...</span>
+                  <span>Sending...</span>
                 </>
               ) : (
                 <>
@@ -308,12 +309,12 @@ SECURITY SIGNATURE: IRCTC_VERIFIED_0x${pnrNo}`;
             <button
               onClick={handleDownloadPDF}
               disabled={isDownloading}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all shadow-md active:scale-95 cursor-pointer disabled:opacity-75"
+              className="flex items-center gap-1 px-3.5 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all shadow-md active:scale-95 cursor-pointer disabled:opacity-75 whitespace-nowrap shrink-0"
             >
               {isDownloading ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Generating 1-Page PDF...</span>
+                  <span>Generating PDF...</span>
                 </>
               ) : (
                 <>
@@ -326,14 +327,14 @@ SECURITY SIGNATURE: IRCTC_VERIFIED_0x${pnrNo}`;
             {/* Print Ticket Only Button */}
             <button
               onClick={() => window.print()}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-black transition-all border border-white/20 cursor-pointer active:scale-95"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-black transition-all border border-white/20 cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
               title="Print only this ticket on 1 single page"
             >
               <Printer className="w-3.5 h-3.5 text-amber-300" />
               <span>Print</span>
             </button>
 
-            <button onClick={onClose} className="p-1 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer ml-1">
+            <button onClick={onClose} className="hidden sm:flex p-1 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer ml-1 shrink-0">
               <X className="w-4.5 h-4.5" />
             </button>
           </div>
@@ -475,10 +476,10 @@ SECURITY SIGNATURE: IRCTC_VERIFIED_0x${pnrNo}`;
             {/* Core Ticket Information Grid */}
             <div className="border-t-2 border-[#000066] text-[10px] sm:text-xs divide-y divide-slate-300 bg-white">
               
-              <div className="grid grid-cols-3 divide-x divide-slate-300 p-2 text-center items-center">
+              <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-slate-300 p-2 text-center items-center gap-1.5 sm:gap-0">
                 <div className="bg-amber-50 border border-amber-200/80 p-1.5 rounded-sm">
                   <span className="font-extrabold block text-amber-900 text-[9px] uppercase tracking-wider">PNR NO.</span>
-                  <span className="font-black text-base sm:text-lg text-[#000066] font-mono block tracking-widest">{pnrNo}</span>
+                  <span className="font-black text-sm sm:text-base md:text-lg text-[#000066] font-mono block tracking-wider sm:tracking-widest">{pnrNo}</span>
                 </div>
                 <div className="p-1.5">
                   <span className="font-extrabold block text-slate-500 text-[9px] uppercase tracking-wider">TRAIN NO. & NAME</span>
@@ -490,7 +491,7 @@ SECURITY SIGNATURE: IRCTC_VERIFIED_0x${pnrNo}`;
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 divide-x divide-slate-300 p-2 text-center items-center">
+              <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-slate-300 p-2 text-center items-center gap-1.5 sm:gap-0">
                 <div>
                   <span className="font-extrabold block text-slate-500 text-[9px] uppercase tracking-wider">QUOTA CODE</span>
                   <span className="font-extrabold uppercase block text-slate-900">{quotaStr}</span>

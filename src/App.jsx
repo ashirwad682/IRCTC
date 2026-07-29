@@ -161,12 +161,18 @@ export default function App() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginNoticeMessage, setLoginNoticeMessage] = useState(null);
 
-  // Search parameters — persisted in sessionStorage so they survive F5 / Cmd+R refresh
+  // Search parameters — initialized empty by default so homepage fields start blank
   const [fromStation, setFromStation] = useState(() => {
-    try { return sessionStorage.getItem('railx_from_station') || ''; } catch (e) { return ''; }
+    try {
+      const val = sessionStorage.getItem('railx_from_station');
+      return (val && val !== 'NDLS') ? val : '';
+    } catch (e) { return ''; }
   });
   const [toStation, setToStation] = useState(() => {
-    try { return sessionStorage.getItem('railx_to_station') || ''; } catch (e) { return ''; }
+    try {
+      const val = sessionStorage.getItem('railx_to_station');
+      return (val && val !== 'CDG') ? val : '';
+    } catch (e) { return ''; }
   });
   const [selectedDate, setSelectedDate] = useState(() => {
     try { return sessionStorage.getItem('railx_selected_date') || ''; } catch (e) { return ''; }
@@ -177,6 +183,22 @@ export default function App() {
   const [selectedClass, setSelectedClass] = useState(() => {
     try { return sessionStorage.getItem('railx_selected_class') || 'ALL'; } catch (e) { return 'ALL'; }
   });
+
+  // Clear legacy default values ('NDLS' / 'CDG') from sessionStorage on initial load
+  useEffect(() => {
+    try {
+      const storedFrom = sessionStorage.getItem('railx_from_station');
+      const storedTo = sessionStorage.getItem('railx_to_station');
+      if (storedFrom === 'NDLS') {
+        sessionStorage.removeItem('railx_from_station');
+        setFromStation('');
+      }
+      if (storedTo === 'CDG') {
+        sessionStorage.removeItem('railx_to_station');
+        setToStation('');
+      }
+    } catch (e) {}
+  }, []);
 
   // Persist search params to sessionStorage whenever they change
   useEffect(() => {

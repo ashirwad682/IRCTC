@@ -1,7 +1,19 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { API_BASE_URL } from '../config/api';
 import { Search, Train, Calendar, Clock, MapPin, ArrowRight, CheckCircle2, ChevronRight, Printer, Share2, Sparkles, Navigation, Wifi, Utensils, AlertCircle, Filter, Zap, Award, Copy, X } from 'lucide-react';
 import { CRIS_REAL_TRAINS } from '../data/crisTrainDatabase';
+
+const formatFullTrainName = (rawName) => {
+  if (!rawName) return '';
+  let name = String(rawName).trim();
+  if (name.endsWith(' RAJDHA')) name = name.replace(/ RAJDHA$/, ' RAJDHANI EXPRESS');
+  if (name.endsWith(' EXPRES')) name = name.replace(/ EXPRES$/, ' EXPRESS');
+  if (name.endsWith(' SF EXP')) name = name.replace(/ SF EXP$/, ' SUPERFAST EXPRESS');
+  if (name.endsWith(' SUPERFA')) name = name.replace(/ SUPERFA$/, ' SUPERFAST EXPRESS');
+  if (name.endsWith(' VB EXP')) name = name.replace(/ VB EXP$/, ' VANDE BHARAT EXPRESS');
+  if (name.endsWith(' SHATABD')) name = name.replace(/ SHATABD$/, ' SHATABDI EXPRESS');
+  return name;
+};
 
 // Helper component for highlighting matched search query in text
 const HighlightText = ({ text, highlight }) => {
@@ -84,6 +96,14 @@ export default function TrainSchedulePage({ initialTrainNumber = '' }) {
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const searchContainerRef = useRef(null);
 
+  // Auto-fetch MongoDB train schedule if initialTrainNumber prop is provided
+  useEffect(() => {
+    if (initialTrainNumber) {
+      setSearchInput(initialTrainNumber);
+      fetchMongoTrainSchedule(initialTrainNumber);
+    }
+  }, [initialTrainNumber]);
+
   // Close suggestions when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -100,91 +120,128 @@ export default function TrainSchedulePage({ initialTrainNumber = '' }) {
     setHighlightedIndex(0);
   }, [searchInput]);
 
-  // Filter suggestion options live according to train number or train name (Starts appearing immediately when writing!)
-  const suggestions = CRIS_REAL_TRAINS.filter(t => {
-    if (!searchInput.trim()) return false;
-    const q = searchInput.toLowerCase().trim();
-    return (
-      t.number.includes(q) ||
-      t.name.toLowerCase().includes(q) ||
-      t.from.toLowerCase().includes(q) ||
-      t.to.toLowerCase().includes(q) ||
-      (t.fromName && t.fromName.toLowerCase().includes(q)) ||
-      (t.toName && t.toName.toLowerCase().includes(q))
-    );
-  }).sort((a, b) => {
-    const q = searchInput.toLowerCase().trim();
-    if (!q) return 0;
-    const aStartsWith = a.number.startsWith(q);
-    const bStartsWith = b.number.startsWith(q);
-    if (aStartsWith && !bStartsWith) return -1;
-    if (!aStartsWith && bStartsWith) return 1;
-    return 0;
-  });
+  const [mongoSuggestions, setMongoSuggestions] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const fetchRapidApiSchedule = (trainNum, fallbackTrain) => {
-    fetch(`${API_BASE_URL}/api/ntes/schedule/${trainNum}`)
-      .then(res => res.json())
-      .then(resData => {
-        console.log('[RapidAPI IRCTC Live Stream]', resData);
-        const apiData = resData?.data?.data || resData?.data;
-        if (apiData) {
-          const rawRoute = apiData.route || apiData.station_list || apiData.intermediateStations;
-          if (Array.isArray(rawRoute) && rawRoute.length > 0) {
-            
-            const formatMinToTime = (min) => {
-              if (min === undefined || min === null || min < 0) return '--';
-              const h = Math.floor(min / 60) % 24;
-              const m = min % 60;
-              return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-            };
-
-            const formattedStations = rawRoute.map((st, idx) => {
-              const arrTime = st.sta ? st.sta : (st.sta_min !== undefined ? formatMinToTime(st.sta_min) : (st.arr_time || st.arr || '--'));
-              const depTime = st.std ? st.std : (st.std_min !== undefined ? formatMinToTime(st.std_min) : (st.dep_time || st.dep || '--'));
-              const dist = st.distance_from_source !== undefined ? `${Math.round(parseFloat(st.distance_from_source))} km` : (st.distance ? `${st.distance}` : `${idx * 20} km`);
-              
-              return {
-                code: st.station_code || st.code || (st.station_name ? st.station_name.slice(0, 4).toUpperCase() : 'STN'),
-                name: st.station_name || st.name || st.code || 'Station',
-                arr: arrTime,
-                dep: depTime,
-                platform: st.platform_number ? `P${st.platform_number}` : (st.platform ? `P${st.platform}` : `P${(idx % 4) + 1}`),
-                distance: dist,
-                day: parseInt(st.day || st.d_day || st.day_count || 1, 10),
-                halt: st.halt ? `${st.halt} min` : '02:00',
-                isStop: st.stop !== undefined ? st.stop : true
-              };
-            });
-
-            const originStn = formattedStations[0];
-            const destStn = formattedStations[formattedStations.length - 1];
-
-            setSelectedTrain({
-              ...(fallbackTrain || {}),
-              number: apiData.train_number || trainNum,
-              name: apiData.train_name || fallbackTrain?.name || `Train #${trainNum}`,
-              from: originStn?.code || fallbackTrain?.from || 'SOURCE',
-              fromName: originStn?.name || fallbackTrain?.fromName || 'SOURCE',
-              to: destStn?.code || fallbackTrain?.to || 'DEST',
-              toName: destStn?.name || fallbackTrain?.toName || 'DESTINATION',
-              distance: destStn?.distance || fallbackTrain?.distance || '252 km',
-              duration: fallbackTrain?.duration || '4h 15m',
-              type: fallbackTrain?.type || 'Intercity / Express',
-              intermediateStations: formattedStations
-            });
+  // Live autocomplete search against MongoDB Atlas 'schedules' database collection
+  useEffect(() => {
+    if (!searchInput || searchInput.trim().length < 1) {
+      setMongoSuggestions([]);
+      return;
+    }
+    const q = searchInput.trim();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      fetch(`${API_BASE_URL}/api/schedules/search?query=${encodeURIComponent(q)}&limit=15`, { signal: controller.signal })
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.success && Array.isArray(data.data)) {
+            const mapped = data.data.map(item => ({
+              number: item.trainNumber,
+              name: formatFullTrainName(item.trainName),
+              from: item.sourceStation?.code || 'SOURCE',
+              fromName: item.sourceStation?.name || 'SOURCE',
+              to: item.destinationStation?.code || 'DEST',
+              toName: item.destinationStation?.name || 'DESTINATION',
+              distance: `${item.totalDistance || 0} km`,
+              duration: `${item.totalStops || 0} Station Stops`,
+              type: item.trainName.toLowerCase().includes('vande') ? 'Vande Bharat' :
+                    item.trainName.toLowerCase().includes('rajdhani') ? 'Rajdhani' :
+                    item.trainName.toLowerCase().includes('shatabdi') ? 'Shatabdi' : 'Superfast Express',
+              mongoData: item
+            }));
+            setMongoSuggestions(mapped);
           }
-        }
-      })
-      .catch(err => console.warn('[RapidAPI Stream Warning]', err));
+        })
+        .catch(err => {
+          if (err.name !== 'AbortError') console.warn('Mongo schedule search notice:', err);
+        });
+    }, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [searchInput]);
+
+  // Strictly filter suggestions against the exact typed query (never show non-matching trains!)
+  const suggestions = useMemo(() => {
+    const q = searchInput.trim().toLowerCase();
+    if (!q) return [];
+
+    const mongoMatched = mongoSuggestions.filter(t => (
+      t.number.toLowerCase().includes(q) ||
+      t.name.toLowerCase().includes(q)
+    ));
+
+    if (mongoMatched.length > 0) {
+      return mongoMatched;
+    }
+
+    return CRIS_REAL_TRAINS.filter(t => (
+      t.number.toLowerCase().includes(q) ||
+      t.name.toLowerCase().includes(q)
+    ));
+  }, [searchInput, mongoSuggestions]);
+
+  // Fetch full train schedule directly from MongoDB Atlas Database
+  const fetchMongoTrainSchedule = async (trainNum, fallbackItem = null) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/schedules/train/${encodeURIComponent(trainNum)}`);
+      const data = await res.json();
+      if (data && data.success && data.data) {
+        const item = data.data;
+        const stops = Array.isArray(item.stops) ? item.stops : [];
+        const originStn = stops[0] || {};
+        const destStn = stops[stops.length - 1] || {};
+
+        const formattedStations = stops.map((s, idx) => ({
+          code: s.stationCode,
+          name: s.stationName,
+          arr: s.arrivalTime === '00:00:00' ? 'Start' : s.arrivalTime,
+          dep: s.departureTime === '00:00:00' ? 'End' : s.departureTime,
+          platform: `P${(idx % 4) + 1}`,
+          distance: `${s.distance} km`,
+          day: 1,
+          halt: s.seq === 1 ? 'Start' : (idx === stops.length - 1 ? 'End' : '02:00'),
+          isStop: true
+        }));
+
+        setSelectedTrain({
+          number: item.trainNumber,
+          name: formatFullTrainName(item.trainName),
+          from: item.sourceStation?.code || originStn.stationCode || 'SOURCE',
+          fromName: item.sourceStation?.name || originStn.stationName || 'SOURCE',
+          to: item.destinationStation?.code || destStn.stationCode || 'DEST',
+          toName: item.destinationStation?.name || destStn.stationName || 'DESTINATION',
+          distance: `${item.totalDistance || destStn.distance || 0} km`,
+          duration: `${stops.length} Station Stops`,
+          type: item.trainName.toLowerCase().includes('vande') ? 'Vande Bharat' :
+                item.trainName.toLowerCase().includes('rajdhani') ? 'Rajdhani' :
+                item.trainName.toLowerCase().includes('shatabdi') ? 'Shatabdi' : 'Superfast Express',
+          intermediateStations: formattedStations
+        });
+      } else if (fallbackItem) {
+        setSelectedTrain(fallbackItem);
+      }
+    } catch (err) {
+      console.warn('Fetch MongoDB schedule notice:', err);
+      if (fallbackItem) setSelectedTrain(fallbackItem);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSelectTrain = (t) => {
     setSearchInput(t.number);
-    setSelectedTrain(t);
     setShowSuggestions(false);
     setStationFilter('');
-    fetchRapidApiSchedule(t.number, t);
+    if (t.mongoData) {
+      fetchMongoTrainSchedule(t.number, t);
+    } else {
+      fetchMongoTrainSchedule(t.number, t);
+    }
   };
 
   const handleSearchSubmit = (e) => {
@@ -193,25 +250,9 @@ export default function TrainSchedulePage({ initialTrainNumber = '' }) {
     const query = searchInput.trim();
     if (!query) return;
 
-    const found = CRIS_REAL_TRAINS.find(t =>
-      t.number === query ||
-      t.name.toLowerCase().includes(query.toLowerCase())
-    );
-
-    if (found) {
-      setSelectedTrain(found);
-      fetchRapidApiSchedule(found.number, found);
-    } else {
-      const fallbackName = CRIS_REAL_TRAINS.find(t => t.number === query)?.name || `Train #${query}`;
-      const initialDraft = {
-        number: query,
-        name: fallbackName,
-        from: 'SOURCE',
-        to: 'DESTINATION'
-      };
-      setSelectedTrain(initialDraft);
-      fetchRapidApiSchedule(query, initialDraft);
-    }
+    // Check if matching suggestion exists
+    const match = suggestions.find(t => t.number === query || t.name.toLowerCase().includes(query.toLowerCase()));
+    fetchMongoTrainSchedule(query, match || null);
   };
 
   // Keyboard navigation for dropdown
@@ -398,7 +439,7 @@ export default function TrainSchedulePage({ initialTrainNumber = '' }) {
                     <div className="flex items-center gap-2">
                       <span className="hidden md:inline text-[10px] text-blue-200 font-bold uppercase">Use ↑ ↓ to navigate</span>
                       <span className="text-[10px] font-black text-amber-300 bg-blue-900/90 px-2.5 py-0.5 rounded-full border border-amber-400/40">
-                        CRIS Live DB
+                        MongoDB Atlas DB
                       </span>
                     </div>
                   </div>

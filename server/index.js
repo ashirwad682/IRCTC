@@ -7,6 +7,7 @@ import mongoose from 'mongoose';
 import User from './models/User.js';
 import Booking from './models/Booking.js';
 import Cancellation from './models/Cancellation.js';
+import TrainSchedule from './models/TrainSchedule.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -168,6 +169,62 @@ io.on('connection', (socket) => {
 app.get('/api/health', (req, res) => {
   const dbState = mongoose.connection.readyState === 1 ? 'CONNECTED' : 'DISCONNECTED';
   res.json({ status: 'UP', database: dbState, timestamp: new Date() });
+});
+
+// REST Endpoints - Train Schedules (MongoDB Atlas)
+app.get('/api/schedules/count', async (req, res) => {
+  try {
+    const count = await TrainSchedule.countDocuments();
+    res.json({ success: true, count, message: 'Total train schedule documents in MongoDB' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get('/api/schedules/train/:trainNumber', async (req, res) => {
+  try {
+    const { trainNumber } = req.params;
+    const schedule = await TrainSchedule.findOne({ trainNumber: String(trainNumber).trim() });
+    if (!schedule) {
+      return res.status(404).json({ success: false, message: 'Train schedule not found' });
+    }
+    res.json({ success: true, data: schedule });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get('/api/schedules/search', async (req, res) => {
+  try {
+    const { from, to, query, limit = 50 } = req.query;
+    const filter = {};
+
+    if (from && to) {
+      filter['stops.stationCode'] = { $all: [from.toUpperCase().trim(), to.toUpperCase().trim()] };
+    } else if (from) {
+      filter['stops.stationCode'] = from.toUpperCase().trim();
+    } else if (to) {
+      filter['stops.stationCode'] = to.toUpperCase().trim();
+    }
+
+    if (query) {
+      const q = String(query).trim();
+      const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.$or = [
+        { trainNumber: new RegExp(escaped, 'i') },
+        { trainName: new RegExp(escaped, 'i') },
+        { 'sourceStation.code': new RegExp(escaped, 'i') },
+        { 'sourceStation.name': new RegExp(escaped, 'i') },
+        { 'destinationStation.code': new RegExp(escaped, 'i') },
+        { 'destinationStation.name': new RegExp(escaped, 'i') }
+      ];
+    }
+
+    const trains = await TrainSchedule.find(filter).limit(Number(limit));
+    res.json({ success: true, count: trains.length, data: trains });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 // Admin: Fix negative/inflated wallet balances (one-time fix after duplicate-cancel-route bug)
 app.post('/api/admin/fix-wallets', async (req, res) => {
@@ -716,14 +773,109 @@ app.delete('/api/master-passengers/delete', async (req, res) => {
     await user.save();
     console.log(`[MongoDB Atlas] Master passenger ${passengerId} deleted for user @${user.username}`);
 
+// GET User's Recent Journeys from MongoDB Atlas Database
+app.get('/api/users/:username/recent-journeys', async (req, res) => {
+  try {
+    const { username } = req.params;
+    const cleanUsername = String(username).toLowerCase().trim();
+    const user = await User.findOne({
+      $or: [
+        { username: cleanUsername },
+        { username: new RegExp(`^${cleanUsername}$`, 'i') }
+      ]
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found in database' });
+    }
+
     res.json({
       success: true,
-      message: 'Passenger deleted from Master List successfully',
-      passengers: user.masterPassengers
+      data: user.recentJourneys || []
     });
   } catch (err) {
-    console.error('Delete master passenger error:', err);
-    res.status(500).json({ success: false, message: 'Database error deleting master passenger' });
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST Add New Recent Journey to MongoDB Atlas Database for User
+app.post('/api/users/:username/recent-journeys', async (req, res) => {
+  try {
+    const { username } = req.params;
+    const { trainNo, fromCode, fromCity, toCode, toCity, classCode, quota } = req.body;
+
+    if (!fromCode || !toCode) {
+      return res.status(400).json({ success: false, message: 'Source and Destination stations are required' });
+    }
+
+    const cleanUsername = String(username).toLowerCase().trim();
+    const user = await User.findOne({
+      $or: [
+        { username: cleanUsername },
+        { username: new RegExp(`^${cleanUsername}$`, 'i') }
+      ]
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User account not found' });
+    }
+
+    const newJourney = {
+      id: 'RJ_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+      trainNo: String(trainNo || '').trim(),
+      fromCode: String(fromCode).toUpperCase().trim(),
+      fromCity: String(fromCity || fromCode).toUpperCase().trim(),
+      toCode: String(toCode).toUpperCase().trim(),
+      toCity: String(toCity || toCode).toUpperCase().trim(),
+      classCode: classCode || 'AC 3 Tier (3A)',
+      quota: quota || 'GENERAL',
+      addedAt: new Date()
+    };
+
+    user.recentJourneys.unshift(newJourney);
+    if (user.recentJourneys.length > 10) {
+      user.recentJourneys = user.recentJourneys.slice(0, 10);
+    }
+
+    await user.save();
+    console.log(`[MongoDB Atlas] Saved recent journey for user ${user.username}: ${newJourney.fromCode} -> ${newJourney.toCode}`);
+
+    res.json({
+      success: true,
+      message: 'Recent journey saved to database successfully',
+      data: user.recentJourneys
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// DELETE Recent Journey from MongoDB Atlas Database for User
+app.delete('/api/users/:username/recent-journeys/:journeyId', async (req, res) => {
+  try {
+    const { username, journeyId } = req.params;
+    const cleanUsername = String(username).toLowerCase().trim();
+    const user = await User.findOne({
+      $or: [
+        { username: cleanUsername },
+        { username: new RegExp(`^${cleanUsername}$`, 'i') }
+      ]
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User account not found' });
+    }
+
+    user.recentJourneys = user.recentJourneys.filter(rj => rj.id !== journeyId && String(rj._id) !== journeyId);
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Recent journey deleted from database successfully',
+      data: user.recentJourneys
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 

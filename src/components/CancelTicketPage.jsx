@@ -1016,76 +1016,80 @@ STATUS: CANCELLED / REFUND INITIATED`;
                   <User className="w-4 h-4 text-blue-900" />
                   <span>CANCELLED PASSENGER DETAILS</span>
                 </h3>
-                <table className="w-full text-xs text-left border-collapse border border-slate-300">
-                  <thead>
-                    <tr className="bg-blue-900 text-white font-bold">
-                      <th className="p-2 border border-slate-300">#</th>
-                      <th className="p-2 border border-slate-300">Passenger Name</th>
-                      <th className="p-2 border border-slate-300">Age / Gender</th>
-                      <th className="p-2 border border-slate-300">Booking Status</th>
-                      <th className="p-2 border border-slate-300">Current Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cancellationResult.cancelledPassengers.map((p, idx) => (
-                      <tr key={idx} className="border-b border-slate-200 hover:bg-slate-50 font-medium">
-                        <td className="p-2 border border-slate-300 font-bold">{idx + 1}</td>
-                        <td className="p-2 border border-slate-300 font-bold text-slate-900">{p.name}</td>
-                        <td className="p-2 border border-slate-300">{p.age} / {p.gender}</td>
-                        <td className="p-2 border border-slate-300 font-bold text-slate-700">{p.berth || p.seat || 'CNF'}</td>
-                        <td className="p-2 border border-slate-300 font-black text-rose-700 bg-rose-50">CANCELLED</td>
+                <div className="overflow-x-auto rounded-lg border border-slate-300">
+                  <table className="w-full text-xs text-left border-collapse min-w-[520px]">
+                    <thead>
+                      <tr className="bg-blue-900 text-white font-bold">
+                        <th className="p-2 border border-slate-300">#</th>
+                        <th className="p-2 border border-slate-300">Passenger Name</th>
+                        <th className="p-2 border border-slate-300">Age / Gender</th>
+                        <th className="p-2 border border-slate-300">Booking Status</th>
+                        <th className="p-2 border border-slate-300">Current Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {cancellationResult.cancelledPassengers.map((p, idx) => (
+                        <tr key={idx} className="border-b border-slate-200 hover:bg-slate-50 font-medium">
+                          <td className="p-2 border border-slate-300 font-bold">{idx + 1}</td>
+                          <td className="p-2 border border-slate-300 font-bold text-slate-900">{p.name}</td>
+                          <td className="p-2 border border-slate-300">{p.age} / {p.gender}</td>
+                          <td className="p-2 border border-slate-300 font-bold text-slate-700">{p.berth || p.seat || 'CNF'}</td>
+                          <td className="p-2 border border-slate-300 font-black text-rose-700 bg-rose-50 whitespace-nowrap">CANCELLED / REFUND PROCESSED</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               {/* Detailed Financial & 18% GST Breakdown Table */}
               <div className="space-y-2">
-                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center justify-between">
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex flex-wrap items-center justify-between gap-2">
                   <span className="flex items-center gap-1.5">
                     <FileText className="w-4 h-4 text-blue-900" />
                     <span>ITEMIZED CANCELLATION & GST CHARGE BREAKDOWN</span>
                   </span>
-                  <span className="text-[10px] font-mono font-black text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">OFFICIAL IRCTC ADVICE</span>
+                  <span className="text-[10px] font-mono font-black text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 shrink-0">OFFICIAL IRCTC ADVICE</span>
                 </h3>
 
-                <table className="w-full text-xs text-left border-collapse border border-slate-300">
-                  <thead>
-                    <tr className="bg-slate-100 text-slate-900 font-black border-b border-slate-300">
-                      <th className="p-2.5 border border-slate-300">Description</th>
-                      <th className="p-2.5 border border-slate-300 text-center">Rate / Rule</th>
-                      <th className="p-2.5 border border-slate-300 text-right">Amount (₹)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 font-medium">
-                    <tr>
-                      <td className="p-2.5 border border-slate-300 font-black text-blue-950">Ticket Fare (Selected Passengers / Base Ticket Cost)</td>
-                      <td className="p-2.5 border border-slate-300 text-center font-bold text-blue-900">Base Ticket Fare</td>
-                      <td className="p-2.5 border border-slate-300 text-right font-mono font-black text-blue-950">₹{(cancellationResult.refundInfo.ticketFare || cancellationResult.refundInfo.grossFare || 2150.00).toFixed(2)}</td>
-                    </tr>
-                    <tr>
-                      <td className="p-2.5 border border-slate-300 font-bold text-slate-800">Flat Base Cancellation Fee (Official IRCTC Tariff)</td>
-                      <td className="p-2.5 border border-slate-300 text-center text-slate-500">Tariff Rule 2026</td>
-                      <td className="p-2.5 border border-slate-300 text-right font-mono font-bold text-rose-700">- ₹{(cancellationResult.refundInfo.baseCancelCharge).toFixed(2)}</td>
-                    </tr>
-                    <tr className="bg-amber-50/50">
-                      <td className="p-2.5 border border-slate-300 font-black text-amber-900">GST on Cancellation Charge (18%) <span className="text-[10px] font-normal text-amber-700 block">(CGST @ 9% + SGST @ 9%)</span></td>
-                      <td className="p-2.5 border border-slate-300 text-center font-bold text-amber-800">18.00% GST</td>
-                      <td className="p-2.5 border border-slate-300 text-right font-mono font-black text-amber-900">- ₹{(cancellationResult.refundInfo.gstAmount).toFixed(2)}</td>
-                    </tr>
-                    <tr className="bg-rose-50 font-black text-rose-950">
-                      <td className="p-2.5 border border-slate-300">Total Cancellation & GST Charges Deducted</td>
-                      <td className="p-2.5 border border-slate-300 text-center text-rose-800">Base Fee + 18% GST</td>
-                      <td className="p-2.5 border border-slate-300 text-right font-mono text-sm text-rose-800">- ₹{(cancellationResult.refundInfo.totalDeduction).toFixed(2)}</td>
-                    </tr>
-                    <tr className="bg-emerald-100 text-emerald-950 font-black text-sm">
-                      <td className="p-3 border border-slate-300 uppercase">NET REFUND AMOUNT CREDITED TO BANK / UPI</td>
-                      <td className="p-3 border border-slate-300 text-center text-emerald-800 text-xs">Original Payment Source</td>
-                      <td className="p-3 border border-slate-300 text-right font-mono text-base text-emerald-700">₹{(cancellationResult.refundInfo.netRefund).toFixed(2)}</td>
-                    </tr>
-                  </tbody>
-                </table>
+                <div className="overflow-x-auto rounded-lg border border-slate-300">
+                  <table className="w-full text-xs text-left border-collapse min-w-[520px]">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-900 font-black border-b border-slate-300">
+                        <th className="p-2.5 border border-slate-300">Description</th>
+                        <th className="p-2.5 border border-slate-300 text-center">Rate / Rule</th>
+                        <th className="p-2.5 border border-slate-300 text-right">Amount (₹)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 font-medium">
+                      <tr>
+                        <td className="p-2.5 border border-slate-300 font-black text-blue-950">Ticket Fare (Selected Passengers / Base Ticket Cost)</td>
+                        <td className="p-2.5 border border-slate-300 text-center font-bold text-blue-900">Base Ticket Fare</td>
+                        <td className="p-2.5 border border-slate-300 text-right font-mono font-black text-blue-950">₹{(cancellationResult.refundInfo.ticketFare || cancellationResult.refundInfo.grossFare || 2150.00).toFixed(2)}</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 border border-slate-300 font-bold text-slate-800">Flat Base Cancellation Fee (Official IRCTC Tariff)</td>
+                        <td className="p-2.5 border border-slate-300 text-center text-slate-500">Tariff Rule 2026</td>
+                        <td className="p-2.5 border border-slate-300 text-right font-mono font-bold text-rose-700">- ₹{(cancellationResult.refundInfo.baseCancelCharge).toFixed(2)}</td>
+                      </tr>
+                      <tr className="bg-amber-50/50">
+                        <td className="p-2.5 border border-slate-300 font-black text-amber-900">GST on Cancellation Charge (18%) <span className="text-[10px] font-normal text-amber-700 block">(CGST @ 9% + SGST @ 9%)</span></td>
+                        <td className="p-2.5 border border-slate-300 text-center font-bold text-amber-800">18.00% GST</td>
+                        <td className="p-2.5 border border-slate-300 text-right font-mono font-black text-amber-900">- ₹{(cancellationResult.refundInfo.gstAmount).toFixed(2)}</td>
+                      </tr>
+                      <tr className="bg-rose-50 font-black text-rose-950">
+                        <td className="p-2.5 border border-slate-300">Total Cancellation & GST Charges Deducted</td>
+                        <td className="p-2.5 border border-slate-300 text-center text-rose-800">Base Fee + 18% GST</td>
+                        <td className="p-2.5 border border-slate-300 text-right font-mono text-sm text-rose-800">- ₹{(cancellationResult.refundInfo.totalDeduction).toFixed(2)}</td>
+                      </tr>
+                      <tr className="bg-emerald-100 text-emerald-950 font-black text-sm">
+                        <td className="p-3 border border-slate-300 uppercase">NET REFUND AMOUNT CREDITED TO BANK / UPI</td>
+                        <td className="p-3 border border-slate-300 text-center text-emerald-800 text-xs">Original Payment Source</td>
+                        <td className="p-3 border border-slate-300 text-right font-mono text-base text-emerald-700">₹{(cancellationResult.refundInfo.netRefund).toFixed(2)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               {/* Official Cancellation Terms & Footer Notice */}

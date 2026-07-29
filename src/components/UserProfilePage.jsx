@@ -41,12 +41,18 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
   const [saveErrorMsg, setSaveErrorMsg] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
+  const sanitizeMobile = (phoneStr) => {
+    if (!phoneStr) return '';
+    const digits = String(phoneStr).replace(/\D/g, '');
+    return digits.length > 10 ? digits.slice(-10) : digits;
+  };
+
   const [profileData, setProfileData] = useState({
     username: user?.username || '',
     fullName: user?.fullName || user?.name || '',
     gender: user?.gender || '',
     dob: user?.dob || '',
-    mobile: user?.phone || user?.mobile || '',
+    mobile: sanitizeMobile(user?.phone || user?.mobile || ''),
     country: user?.country || 'India',
     email: user?.email || '',
     address: user?.address || ''
@@ -59,6 +65,28 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
   const [addrCity, setAddrCity] = useState('');
   const [addrState, setAddrState] = useState('');
 
+  // Add Recent Journey List States
+  const [newJourneyTrain, setNewJourneyTrain] = useState('');
+  const [newJourneyClass, setNewJourneyClass] = useState('Select Class');
+  const [newJourneyFrom, setNewJourneyFrom] = useState('Select Origin');
+  const [newJourneyTo, setNewJourneyTo] = useState('Select Destination');
+  const [newJourneyQuota, setNewJourneyQuota] = useState('GENERAL');
+  const [favJourneys, setFavJourneys] = useState([]);
+
+  // Load user's saved recent/favourite journeys from MongoDB Atlas Database
+  useEffect(() => {
+    if (user?.username) {
+      fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(user.username)}/recent-journeys`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.success && Array.isArray(data.data)) {
+            setFavJourneys(data.data);
+          }
+        })
+        .catch(err => console.warn('Fetch user recent journeys notice:', err));
+    }
+  }, [user]);
+
   useEffect(() => {
     if (user) {
       setProfileData({
@@ -66,7 +94,7 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
         fullName: user.fullName || user.name || '',
         gender: user.gender || '',
         dob: user.dob || '',
-        mobile: user.phone || user.mobile || '',
+        mobile: sanitizeMobile(user.phone || user.mobile || ''),
         country: user.country || 'India',
         email: user.email || '',
         address: user.address || ''
@@ -492,23 +520,64 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
     setMasterMsg('Passenger deleted from Master List');
   };
 
-  const handleAddJourney = (e) => {
+  const handleAddJourney = async (e) => {
     e.preventDefault();
-    if (!newJourneyTrain) return;
-    setFavJourneys([
-      ...favJourneys,
-      {
-        id: Date.now(),
-        trainNo: newJourneyTrain,
-        fromCode: newJourneyFrom || 'JSME',
-        fromCity: 'JASIDIH JN',
-        toCode: newJourneyTo || 'PNC',
-        toCity: 'PATNA SAHEB',
-        classCode: newJourneyClass || 'AC 3 Tier (3A)',
-        quota: newJourneyQuota || 'GENERAL'
+    if (!newJourneyFrom || newJourneyFrom === 'Select Origin' || !newJourneyTo || newJourneyTo === 'Select Destination') {
+      alert('Please select both From Station and To Station');
+      return;
+    }
+
+    const fromStn = STATIONS.find(s => s.code === newJourneyFrom) || { code: newJourneyFrom, city: newJourneyFrom };
+    const toStn = STATIONS.find(s => s.code === newJourneyTo) || { code: newJourneyTo, city: newJourneyTo };
+
+    const payload = {
+      trainNo: newJourneyTrain || '',
+      fromCode: newJourneyFrom,
+      fromCity: fromStn.city || newJourneyFrom,
+      toCode: newJourneyTo,
+      toCity: toStn.city || newJourneyTo,
+      classCode: newJourneyClass !== 'Select Class' ? newJourneyClass : 'AC 3 Tier (3A)',
+      quota: newJourneyQuota || 'GENERAL'
+    };
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(user?.username || 'ashirwad2')}/recent-journeys`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data && data.success && Array.isArray(data.data)) {
+        setFavJourneys(data.data);
+        setNewJourneyTrain('');
+        setNewJourneyFrom('Select Origin');
+        setNewJourneyTo('Select Destination');
+      } else {
+        const newFav = { id: 'RJ_' + Date.now(), ...payload };
+        setFavJourneys(prev => [newFav, ...prev]);
+        setNewJourneyTrain('');
       }
-    ]);
-    setNewJourneyTrain('');
+    } catch (err) {
+      const newFav = { id: 'RJ_' + Date.now(), ...payload };
+      setFavJourneys(prev => [newFav, ...prev]);
+      setNewJourneyTrain('');
+    }
+  };
+
+  const handleDeleteJourney = async (journeyId) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(user?.username || 'ashirwad2')}/recent-journeys/${journeyId}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (data && data.success && Array.isArray(data.data)) {
+        setFavJourneys(data.data);
+      } else {
+        setFavJourneys(prev => prev.filter(f => f.id !== journeyId && f._id !== journeyId));
+      }
+    } catch (err) {
+      setFavJourneys(prev => prev.filter(f => f.id !== journeyId && f._id !== journeyId));
+    }
   };
 
   return (
@@ -525,10 +594,10 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
         </button>
 
         {/* Tab Switchers */}
-        <div className="flex flex-wrap items-center gap-1.5 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-2xs text-xs font-black">
+        <div className="flex items-center gap-1.5 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-2xs text-xs font-black overflow-x-auto max-w-full flex-nowrap scrollbar-none">
           <button
             onClick={() => setActiveSubTab('profile')}
-            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${
               activeSubTab === 'profile' ? 'bg-[#000066] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-50'
             }`}
           >
@@ -537,7 +606,7 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
 
           <button
             onClick={() => setActiveSubTab('change_password')}
-            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${
               activeSubTab === 'change_password' ? 'bg-[#000066] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-50'
             }`}
           >
@@ -546,7 +615,7 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
 
           <button
             onClick={() => setActiveSubTab('authenticate')}
-            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${
               activeSubTab === 'authenticate' ? 'bg-[#000066] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-50'
             }`}
           >
@@ -555,7 +624,7 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
 
           <button
             onClick={() => setActiveSubTab('master_list')}
-            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${
               activeSubTab === 'master_list' ? 'bg-[#000066] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-50'
             }`}
           >
@@ -564,7 +633,7 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
 
           <button
             onClick={() => onOpenBookedTickets ? onOpenBookedTickets() : setActiveSubTab('bookings')}
-            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${
               activeSubTab === 'bookings' ? 'bg-[#000066] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-50'
             }`}
           >
@@ -573,7 +642,7 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
 
           <button
             onClick={() => setActiveSubTab('recent_journeys')}
-            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${
               activeSubTab === 'recent_journeys' ? 'bg-[#000066] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-50'
             }`}
           >
@@ -937,11 +1006,11 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
 
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
                   <span className="sm:col-span-4 text-slate-500 font-bold">ISD-Mobile:</span>
-                  <span className="sm:col-span-8 font-mono font-bold text-slate-900 flex items-center gap-1">
+                  <span className="sm:col-span-8 font-mono font-bold text-slate-900 flex items-center gap-1.5">
                     {profileData.mobile ? (
                       <>
-                        <span className="text-slate-500 font-normal">+91</span>
-                        <span>{profileData.mobile.replace(/^\+?91/, '')}</span>
+                        <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-700 font-sans text-xs font-black select-none">🇮🇳 +91</span>
+                        <span className="font-mono text-xs sm:text-sm font-black tracking-wider text-slate-900">{sanitizeMobile(profileData.mobile)}</span>
                       </>
                     ) : (
                       <span className="text-slate-400 font-normal italic font-sans">Not Provided</span>
@@ -1477,35 +1546,76 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
           </form>
 
           {/* FAVOURITE JOURNEY LIST */}
-          <div className="bg-white/80 backdrop-blur-xs rounded-3xl border border-slate-300 p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-              <h2 className="text-sm font-black text-[#000066] uppercase">FAVOURITE JOURNEY LIST</h2>
-              <div className="w-6 h-6 rounded bg-orange-500 text-white flex items-center justify-center font-bold text-sm">+</div>
+          <div className="bg-white/90 backdrop-blur-md rounded-3xl border border-slate-300 p-6 space-y-4 shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-black text-[#000066] uppercase tracking-wider">FAVOURITE JOURNEY LIST</h2>
+                <span className="text-[10px] font-black text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                  {favJourneys.length} Saved
+                </span>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {favJourneys.map((fj) => (
-                <div key={fj.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-2 relative">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono font-black text-slate-900 text-xs">{fj.trainNo}</span>
-                    <button type="button" onClick={() => setFavJourneys(favJourneys.filter(f => f.id !== fj.id))} className="text-slate-400 hover:text-rose-600">
-                      <Trash2 className="w-4 h-4" />
+            {favJourneys.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {favJourneys.map((fj) => (
+                  <div key={fj.id || fj._id} className="bg-slate-50/90 hover:bg-blue-50/40 p-4 rounded-2xl border border-slate-200 shadow-2xs hover:shadow-md transition-all space-y-3 relative group">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-black text-slate-900 text-xs bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                        {fj.trainNo || 'Express'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteJourney(fj.id || fj._id)}
+                        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                        title="Delete saved journey"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs font-black text-slate-900">
+                      <div>
+                        <span className="block text-[10px] font-mono text-slate-400 uppercase">{fj.fromCode}</span>
+                        <span className="truncate max-w-[110px] block">{fj.fromCity || fj.fromCode}</span>
+                      </div>
+                      <span className="text-blue-600 font-black">➔</span>
+                      <div className="text-right">
+                        <span className="block text-[10px] font-mono text-slate-400 uppercase">{fj.toCode}</span>
+                        <span className="truncate max-w-[110px] block">{fj.toCity || fj.toCode}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 pt-2 border-t border-slate-200/80">
+                      <div>
+                        <span className="block text-slate-400">Class</span>
+                        <strong className="text-slate-800 font-extrabold">{fj.classCode}</strong>
+                      </div>
+                      <div className="text-right">
+                        <span className="block text-slate-400">Quota</span>
+                        <strong className="text-slate-800 font-extrabold">{fj.quota}</strong>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onBackToSearch) onBackToSearch();
+                      }}
+                      className="w-full py-1.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white font-extrabold text-[11px] shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-1"
+                    >
+                      <span>Book This Route</span>
+                      <span>➔</span>
                     </button>
                   </div>
-
-                  <div className="flex items-center justify-between text-xs font-black text-slate-900">
-                    <div><span className="block text-[10px] text-slate-400">{fj.fromCode}</span><span>{fj.fromCity}</span></div>
-                    <span>➔</span>
-                    <div><span className="block text-[10px] text-slate-400">{fj.toCode}</span><span>{fj.toCity}</span></div>
-                  </div>
-
-                  <div className="flex justify-between text-[10px] font-bold text-slate-500 pt-2 border-t border-slate-200">
-                    <div><span>Class</span><strong className="block text-slate-800">{fj.classCode}</strong></div>
-                    <div><span>Quota</span><strong className="block text-slate-800">{fj.quota}</strong></div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-slate-50/60 p-8 rounded-2xl border border-dashed border-slate-300 text-center space-y-2">
+                <p className="text-xs font-black text-slate-700">No favorite journeys saved yet</p>
+                <p className="text-[11px] text-slate-500 font-medium">Use the form above to add your frequent routes. They will be saved to your MongoDB account and displayed on your homepage!</p>
+              </div>
+            )}
           </div>
         </div>
       )}

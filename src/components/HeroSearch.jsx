@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import StationAutocomplete from './StationAutocomplete';
 import CustomCalendarModal from './CustomCalendarModal';
+import { API_BASE_URL } from '../config/api';
 import { Search, Calendar, MapPin, ArrowRightLeft, Ticket, Route, Undo2, ChevronRight, Smartphone, QrCode, Tag, Sparkles } from 'lucide-react';
 
 export default function HeroSearch({
@@ -27,7 +28,22 @@ export default function HeroSearch({
   const [concession, setConcession] = useState('NONE');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [mongoRecentJourneys, setMongoRecentJourneys] = useState([]);
   const videoRef = useRef(null);
+
+  // Fetch user's saved recent journeys directly from MongoDB Atlas Database
+  useEffect(() => {
+    if (currentUser?.username) {
+      fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(currentUser.username)}/recent-journeys`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.success && Array.isArray(data.data)) {
+            setMongoRecentJourneys(data.data);
+          }
+        })
+        .catch(err => console.warn('Fetch homepage recent journeys notice:', err));
+    }
+  }, [currentUser]);
 
   // Set Slow Motion Playback Rate (0.5x speed for smooth cinematic movement)
   useEffect(() => {
@@ -91,50 +107,69 @@ export default function HeroSearch({
     setSelectedDate(iso);
   };
 
-  // Derive dynamic list of recent journeys strictly from actual user database bookings
-  const dynamicJourneys = Array.isArray(userBookings)
-    ? userBookings.reduce((acc, b) => {
-      if (!b?.from || !b?.to) return acc;
-      const key = `${b.from}_${b.to}`;
-      if (!acc.find(item => item.key === key)) {
-        acc.push({
-          key,
-          from: b.from,
-          fromName: b.from,
-          to: b.to,
-          toName: b.to
-        });
-      }
-      return acc;
-    }, []).slice(0, 4)
-    : [];
+  // Derive dynamic list of recent journeys combining MongoDB Atlas database records & user bookings
+  const dynamicJourneys = useMemo(() => {
+    const list = [];
+    if (Array.isArray(mongoRecentJourneys)) {
+      mongoRecentJourneys.forEach(rj => {
+        if (rj?.fromCode && rj?.toCode) {
+          list.push({
+            key: `mongo_${rj.fromCode}_${rj.toCode}`,
+            from: rj.fromCode,
+            fromName: rj.fromCity || rj.fromCode,
+            to: rj.toCode,
+            toName: rj.toCity || rj.toCode
+          });
+        }
+      });
+    }
+    if (Array.isArray(userBookings)) {
+      userBookings.forEach(b => {
+        if (b?.from && b?.to) {
+          const key = `booking_${b.from}_${b.to}`;
+          if (!list.find(item => item.from === b.from && item.to === b.to)) {
+            list.push({
+              key,
+              from: b.from,
+              fromName: b.from,
+              to: b.to,
+              toName: b.to
+            });
+          }
+        }
+      });
+    }
+    return list.slice(0, 6);
+  }, [mongoRecentJourneys, userBookings]);
 
   const tripsToDisplay = Array.isArray(userBookings) ? userBookings.filter(b => b.status !== 'CANCELLED') : [];
   const lastTransaction = Array.isArray(userBookings) && userBookings.length > 0 ? userBookings[0] : null;
 
   return (
-    <div className="relative overflow-hidden bg-gradient-to-br from-[#e8f0fe] via-[#f0f4ff] to-[#fef3e8] pb-16">
+    <div className="relative overflow-hidden bg-gradient-to-br from-[#ebf3fe] via-[#f2f6ff] to-[#fef5ec] pb-16">
+      {/* Ambient background grid pattern for modern tech aesthetic */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6 relative z-10">
 
-        {/* HERO BANNER HEADER: Clean Light & Airy Layout (Blue color box removed) */}
-        <div className="relative py-3 my-2">
+        {/* HERO BANNER HEADER */}
+        <div className="relative py-4 my-2">
           <div className="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-6">
             <div className="space-y-3 max-w-xl text-center lg:text-left">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50/80 border border-blue-200/80 text-[#0026cd] font-extrabold text-xs shadow-2xs">
-                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-600/10 border border-blue-500/20 text-[#0026cd] font-black text-xs shadow-xs backdrop-blur-xs">
+                <Sparkles className="w-4 h-4 text-blue-600 animate-pulse" />
                 <span>Official IRCTC Next-Gen Railway Booking Portal</span>
               </div>
-              <h1 className="text-4xl sm:text-5xl font-black text-slate-900 tracking-tight leading-tight">
-                Your journey, <span className="text-[#f06d06]">made simple</span>
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-tight">
+                Your journey, <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 via-amber-600 to-orange-500">made simple</span>
               </h1>
-              <p className="text-xs sm:text-sm text-slate-600 font-semibold max-w-lg">
+              <p className="text-xs sm:text-sm text-slate-600 font-bold max-w-lg leading-relaxed">
                 100% Guaranteed seat availability, instant PNR verification, and official bank refunds.
               </p>
             </div>
 
             {/* Vande Bharat Express Ultra-HD Video Showcase Card */}
-            <div className="relative shrink-0 rounded-2xl overflow-hidden border-2 border-slate-200/80 shadow-xl bg-slate-950 group max-w-sm sm:max-w-md w-full aspect-video">
+            <div className="relative shrink-0 rounded-3xl overflow-hidden border-2 border-white/80 shadow-2xl bg-slate-950 group max-w-sm sm:max-w-md w-full aspect-video">
               <video
                 ref={videoRef}
                 src="/vande_bharat_video.mov"
@@ -148,22 +183,22 @@ export default function HeroSearch({
               />
 
               {/* Glassmorphic Ambient Glow Overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/30 pointer-events-none" />
 
               {/* Live Streaming Indicator Header */}
               <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none z-10">
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white text-[10px] font-black">
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white text-[10px] font-black shadow-md">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                  <span className="text-emerald-300">LIVE SHOWCASE</span>
+                  <span className="text-emerald-300 tracking-wider">LIVE SHOWCASE</span>
                 </div>
-                <span className="text-[9px] font-black text-cyan-300 bg-cyan-950/80 px-2 py-0.5 rounded-full border border-cyan-500/40 backdrop-blur-md">
+                <span className="text-[9px] font-black text-cyan-300 bg-cyan-950/80 px-2.5 py-1 rounded-full border border-cyan-500/40 backdrop-blur-md shadow-md">
                   ✨ 8K ULTRA HD HDR
                 </span>
               </div>
 
               {/* Bottom Badges */}
               <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-none z-10">
-                <span className="flex items-center gap-1.5 bg-gradient-to-r from-orange-600 to-amber-600 text-white px-3 py-1.5 rounded-xl text-xs font-black shadow-lg backdrop-blur-md border border-orange-400/30">
+                <span className="flex items-center gap-1.5 bg-gradient-to-r from-orange-600 to-amber-600 text-white px-3.5 py-1.5 rounded-xl text-xs font-black shadow-xl backdrop-blur-md border border-orange-400/30">
                   ⚡ Vande Bharat Express
                 </span>
                 <span className="text-[10px] font-black text-blue-100 bg-blue-950/90 px-2.5 py-1 rounded-xl border border-blue-400/30 backdrop-blur-md shadow-md">
@@ -175,7 +210,7 @@ export default function HeroSearch({
         </div>
 
         {/* Floating Search Card */}
-        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xl p-5 sm:p-7 relative z-10">
+        <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-blue-100/90 shadow-2xl p-5 sm:p-7 relative z-10 transition-all duration-300 hover:shadow-[0_20px_50px_rgba(0,38,205,0.08)]">
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
 
@@ -199,7 +234,7 @@ export default function HeroSearch({
                 <div className="sm:col-span-1 flex justify-center -my-2 sm:my-0 z-10">
                   <button
                     onClick={handleSwap}
-                    className="w-10 h-10 rounded-2xl bg-[#0026cd] hover:bg-blue-900 text-white flex items-center justify-center shadow-lg active:rotate-180 transition-all cursor-pointer border border-blue-400/30"
+                    className="w-10 h-10 rounded-2xl bg-[#0026cd] hover:bg-blue-900 text-white flex items-center justify-center shadow-lg hover:shadow-blue-500/20 active:rotate-180 transition-all duration-300 cursor-pointer border border-blue-400/30"
                     title="Swap Source and Destination"
                   >
                     <ArrowRightLeft className="w-4 h-4" />
@@ -222,21 +257,21 @@ export default function HeroSearch({
                   className="sm:col-span-3 relative bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs hover:border-blue-600 transition-all group cursor-pointer z-20 min-h-[66px] flex flex-col justify-between"
                 >
                   <div className="flex items-center justify-between">
-                    <label className="text-[10px] text-slate-400 font-extrabold uppercase">
+                    <label className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">
                       JOURNEY DATE
                     </label>
                     <div className="flex items-center gap-1 z-20">
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); setQuickDate(0); }}
-                        className="text-[9px] font-black text-blue-700 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+                        className="text-[9px] font-black text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-md transition-colors cursor-pointer border border-blue-200/60"
                       >
                         Today
                       </button>
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); setQuickDate(1); }}
-                        className="text-[9px] font-black text-blue-700 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+                        className="text-[9px] font-black text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-md transition-colors cursor-pointer border border-blue-200/60"
                       >
                         Tomorrow
                       </button>
@@ -275,7 +310,7 @@ export default function HeroSearch({
                 {/* Quota Selector */}
                 <div className="sm:col-span-4 bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs hover:border-blue-500 transition-all">
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-[10px] text-slate-400 font-extrabold uppercase block">
+                    <label className="text-[10px] text-slate-400 font-extrabold uppercase block tracking-wider">
                       Quota
                     </label>
                     {isTatkalWindow && (
@@ -310,7 +345,7 @@ export default function HeroSearch({
 
                 {/* Concession Selector */}
                 <div className="sm:col-span-4 bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs hover:border-blue-500 transition-all">
-                  <label className="text-[10px] text-slate-400 font-extrabold uppercase block mb-1">
+                  <label className="text-[10px] text-slate-400 font-extrabold uppercase block mb-1 tracking-wider">
                     Concession
                   </label>
                   <select
@@ -328,7 +363,7 @@ export default function HeroSearch({
                 <div className="sm:col-span-4">
                   <button
                     onClick={onSearch}
-                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#0026cd] to-[#1e40af] hover:from-blue-900 hover:to-indigo-900 text-white font-black text-sm shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer border border-blue-400/20"
+                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#0026cd] via-[#0034ea] to-[#1e40af] hover:from-blue-900 hover:to-indigo-900 text-white font-black text-sm shadow-xl hover:shadow-blue-500/25 flex items-center justify-center gap-2 transition-all duration-200 active:scale-95 cursor-pointer border border-blue-400/20"
                   >
                     <Search className="w-5 h-5" />
                     <span>Search Trains</span>
@@ -345,9 +380,9 @@ export default function HeroSearch({
               {/* Check PNR Status Card */}
               <div
                 onClick={onOpenAIModal}
-                className="bg-slate-50 hover:bg-blue-50/50 p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs hover:border-blue-300 cursor-pointer transition-all flex items-center gap-3 group"
+                className="bg-slate-50/80 hover:bg-blue-50/70 p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs hover:border-blue-300 cursor-pointer transition-all flex items-center gap-3 group"
               >
-                <div className="w-10 h-10 rounded-xl bg-blue-100 text-[#0026cd] flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-blue-100/80 text-[#0026cd] flex items-center justify-center group-hover:scale-110 transition-transform shrink-0 shadow-xs">
                   <Ticket className="w-5 h-5" />
                 </div>
                 <div>
@@ -359,9 +394,9 @@ export default function HeroSearch({
               {/* Train Schedule Card */}
               <div
                 onClick={() => onOpenSchedule ? onOpenSchedule() : onOpenAIModal()}
-                className="bg-slate-50 hover:bg-blue-50/50 p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs hover:border-blue-300 cursor-pointer transition-all flex items-center gap-3 group"
+                className="bg-slate-50/80 hover:bg-blue-50/70 p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs hover:border-blue-300 cursor-pointer transition-all flex items-center gap-3 group"
               >
-                <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-indigo-100/80 text-indigo-700 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0 shadow-xs">
                   <Route className="w-5 h-5" />
                 </div>
                 <div>
@@ -374,9 +409,9 @@ export default function HeroSearch({
               {currentUser && (
                 <div
                   onClick={onOpenRefundModal}
-                  className="bg-slate-50 hover:bg-emerald-50/50 p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs hover:border-emerald-300 cursor-pointer transition-all flex items-center gap-3 group"
+                  className="bg-slate-50/80 hover:bg-emerald-50/70 p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs hover:border-emerald-300 cursor-pointer transition-all flex items-center gap-3 group"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100/80 text-emerald-700 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0 shadow-xs">
                     <Undo2 className="w-5 h-5" />
                   </div>
                   <div>
@@ -392,29 +427,50 @@ export default function HeroSearch({
 
         </div>
 
-        {/* LOGGED IN USER RECENT JOURNEYS & UPCOMING TRIPS DASHBOARD */}
-        {currentUser && Array.isArray(userBookings) && userBookings.length > 0 && (
-          <div className="bg-white/70 backdrop-blur-xs rounded-3xl border border-blue-100 p-6 shadow-sm space-y-6 relative z-10">
+        {/* LOGGED IN USER RECENT & FAVORITE JOURNEYS & UPCOMING TRIPS DASHBOARD */}
+        {currentUser && (
+          <div className="bg-white/80 backdrop-blur-md rounded-3xl border border-blue-100 p-6 shadow-md space-y-6 relative z-10">
 
-            {/* Your Recent Journeys */}
+            {/* Your Favorite & Recent Journeys */}
             <div className="space-y-3">
-              <h3 className="text-sm font-black text-[#000066]">Your recent journeys</h3>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
+                  <h3 className="text-sm font-black text-[#000066] uppercase tracking-wider">Your Favorite & Recent Journeys</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={onOpenProfile}
+                  className="text-xs font-black text-blue-700 hover:text-blue-900 hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  <span>Manage in Profile</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
               {dynamicJourneys.length > 0 ? (
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2.5">
                   {dynamicJourneys.map((j, idx) => (
                     <button
-                      key={idx}
+                      key={j.key || idx}
                       onClick={() => handleRecentJourney(j.from, j.to)}
-                      className="px-4 py-2 rounded-full bg-white hover:bg-blue-50 text-slate-800 hover:text-blue-950 font-extrabold text-xs border border-slate-200 shadow-2xs transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                      className="px-4 py-2.5 rounded-2xl bg-white hover:bg-blue-600 hover:text-white text-slate-800 font-black text-xs border border-slate-200/90 shadow-2xs hover:shadow-md transition-all active:scale-95 flex items-center gap-2 cursor-pointer group"
                     >
-                      <span>{j.fromName || j.from} &gt; {j.toName || j.to}</span>
+                      <span className="text-blue-700 group-hover:text-white transition-colors font-mono">{j.from}</span>
+                      <span className="text-slate-400 group-hover:text-blue-100">➔</span>
+                      <span className="text-blue-700 group-hover:text-white transition-colors font-mono">{j.to}</span>
+                      <span className="text-[10px] text-slate-500 group-hover:text-blue-200 font-semibold truncate max-w-[140px]">
+                        ({j.fromName} to {j.toName})
+                      </span>
                     </button>
                   ))}
                 </div>
               ) : (
-                <p className="text-xs font-semibold text-slate-500 bg-white/50 p-3 rounded-2xl border border-slate-200/60">
-                  No recent journeys yet. Book your train tickets to see your recent routes here.
-                </p>
+                <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/80 flex items-center justify-between gap-4">
+                  <p className="text-xs font-bold text-slate-600">
+                    No favorite journeys added yet. Go to <strong className="text-blue-900 cursor-pointer underline" onClick={onOpenProfile}>My Account ➔ Add Recent Journey List</strong> to save your frequent routes to MongoDB Atlas!
+                  </p>
+                </div>
               )}
             </div>
 
@@ -526,27 +582,31 @@ export default function HeroSearch({
 
                 {/* App Store Buttons */}
                 <div className="flex flex-col sm:flex-row items-center gap-3">
-                  <button
-                    onClick={() => alert("Redirecting to Google Play Store...")}
-                    className="px-4 py-2.5 rounded-2xl bg-black text-white font-black text-xs shadow-lg flex items-center gap-2 hover:bg-slate-800 transition-all active:scale-95 cursor-pointer"
+                  <a
+                    href="https://play.google.com/store/apps/details?id=cris.org.in.prs.ima&hl=en_IN"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2.5 rounded-2xl bg-black text-white font-black text-xs shadow-lg flex items-center gap-2 hover:bg-slate-800 transition-all active:scale-95 cursor-pointer no-underline"
                   >
                     <Smartphone className="w-5 h-5 text-emerald-400" />
                     <div className="text-left">
                       <span className="text-[8px] text-slate-400 uppercase font-bold block">GET IT ON</span>
                       <span className="text-xs font-black">Google Play</span>
                     </div>
-                  </button>
+                  </a>
 
-                  <button
-                    onClick={() => alert("Redirecting to Apple App Store...")}
-                    className="px-4 py-2.5 rounded-2xl bg-black text-white font-black text-xs shadow-lg flex items-center gap-2 hover:bg-slate-800 transition-all active:scale-95 cursor-pointer"
+                  <a
+                    href="https://apps.apple.com/in/app/irctc-rail-connect/id1386197253"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2.5 rounded-2xl bg-black text-white font-black text-xs shadow-lg flex items-center gap-2 hover:bg-slate-800 transition-all active:scale-95 cursor-pointer no-underline"
                   >
                     <Smartphone className="w-5 h-5 text-blue-400" />
                     <div className="text-left">
                       <span className="text-[8px] text-slate-400 uppercase font-bold block">Download on the</span>
                       <span className="text-xs font-black">App Store</span>
                     </div>
-                  </button>
+                  </a>
                 </div>
 
                 {/* QR Code Box */}

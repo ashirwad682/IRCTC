@@ -217,12 +217,12 @@ export default function PassengerDetailsModal({ user, train, selectedClass, sele
       const stored = sessionStorage.getItem('railx_passenger_modal_state');
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed.passengers) && parsed.passengers.length > 0) {
+        if (Array.isArray(parsed.passengers)) {
           return parsed.passengers;
         }
       }
     } catch (e) {}
-    return [{ id: 1, name: '', age: '', gender: 'Male', berth: 'No preference', food: 'VEG' }];
+    return [];
   });
 
   // Modal controls
@@ -513,7 +513,6 @@ export default function PassengerDetailsModal({ user, train, selectedClass, sele
   };
 
   const removePassenger = (id) => {
-    if (passengers.length === 1) return;
     setPassengers(passengers.filter(p => p.id !== id));
   };
 
@@ -527,6 +526,10 @@ export default function PassengerDetailsModal({ user, train, selectedClass, sele
 
   const handleCalculateFareSubmit = (e) => {
     e.preventDefault();
+    if (passengers.length === 0) {
+      alert('Please add at least 1 passenger to proceed with booking.');
+      return;
+    }
     // Validate passengers
     for (let p of passengers) {
       if (!p.name || !p.age) {
@@ -849,95 +852,116 @@ export default function PassengerDetailsModal({ user, train, selectedClass, sele
                       </div>
                     )}
 
-                    {passengers.map((p, idx) => (
-                      <div key={p.id} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3 relative group">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-extrabold text-slate-800">Passenger {idx + 1}</span>
-                          {passengers.length > 1 && (
+                    {passengers.length === 0 ? (
+                      <div className="p-6 bg-slate-50 border-2 border-dashed border-slate-300 rounded-2xl text-center space-y-3">
+                        <div className="w-12 h-12 rounded-full bg-blue-100 text-[#0026cd] flex items-center justify-center mx-auto">
+                          <User className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-black text-slate-900">No Passenger Added Yet</h4>
+                          <p className="text-xs text-slate-500 font-medium max-w-sm mx-auto mt-0.5">
+                            Please click <strong className="text-[#0026cd]">+ New Passenger</strong> or select from your saved Master List above to add passenger details.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={addPassenger}
+                          className="px-5 py-2.5 bg-[#0026cd] hover:bg-blue-800 text-white rounded-full text-xs font-black transition-all shadow-xs cursor-pointer inline-flex items-center gap-1.5"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>+ Add New Passenger</span>
+                        </button>
+                      </div>
+                    ) : (
+                      passengers.map((p, idx) => (
+                        <div key={p.id} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3 relative group">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-extrabold text-slate-800">Passenger {idx + 1}</span>
                             <button
                               type="button"
                               onClick={() => removePassenger(p.id)}
                               className="text-rose-600 hover:text-rose-800 p-1 cursor-pointer"
+                              title="Remove Passenger"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                          <div className="sm:col-span-4 space-y-1">
-                            <label className="text-[11px] font-bold text-slate-600">Name *</label>
-                            <input
-                              type="text"
-                              placeholder="Enter Name"
-                              value={p.name}
-                              onChange={(e) => updatePassenger(p.id, 'name', e.target.value.toUpperCase())}
-                              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-white outline-none focus:ring-2 focus:ring-[#0026cd]"
-                              required
-                            />
                           </div>
 
-                          <div className="sm:col-span-2 space-y-1">
-                            <label className="text-[11px] font-bold text-slate-600">Age *</label>
-                            <input
-                              type="number"
-                              placeholder="Age"
-                              maxLength={3}
-                              value={p.age}
-                              onChange={(e) => updatePassenger(p.id, 'age', e.target.value)}
-                              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-white outline-none focus:ring-2 focus:ring-[#0026cd]"
-                              required
-                            />
-                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                            <div className="sm:col-span-4 space-y-1">
+                              <label className="text-[11px] font-bold text-slate-600">Name *</label>
+                              <input
+                                type="text"
+                                placeholder="Enter Name"
+                                value={p.name}
+                                onChange={(e) => updatePassenger(p.id, 'name', e.target.value.toUpperCase())}
+                                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-white outline-none focus:ring-2 focus:ring-[#0026cd]"
+                                required
+                              />
+                            </div>
 
-                          <div className={isPremium ? "sm:col-span-2 space-y-1" : "sm:col-span-3 space-y-1"}>
-                            <label className="text-[11px] font-bold text-slate-600">Gender *</label>
-                            <select
-                              value={p.gender}
-                              onChange={(e) => updatePassenger(p.id, 'gender', e.target.value)}
-                              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-white outline-none focus:ring-2 focus:ring-[#0026cd]"
-                            >
-                              <option value="Male">Male</option>
-                              <option value="Female">Female</option>
-                              <option value="Transgender">Transgender</option>
-                            </select>
-                          </div>
-
-                          <div className={isPremium ? "sm:col-span-2 space-y-1" : "sm:col-span-3 space-y-1"}>
-                            <label className="text-[11px] font-bold text-slate-600">Berth Preference</label>
-                            <select
-                              value={p.berth}
-                              onChange={(e) => updatePassenger(p.id, 'berth', e.target.value)}
-                              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-white outline-none focus:ring-2 focus:ring-[#0026cd]"
-                            >
-                              <option value="No preference">No preference</option>
-                              <option value="Lower">Lower</option>
-                              <option value="Middle">Middle</option>
-                              <option value="Upper">Upper</option>
-                              <option value="Side Lower">Side Lower</option>
-                              <option value="Side Upper">Side Upper</option>
-                            </select>
-                          </div>
-
-                          {/* Onboard Catering Preference - ONLY for Premium Trains (Rajdhani, Vande Bharat, Shatabdi, Tejas, Duronto) */}
-                          {isPremium && (
                             <div className="sm:col-span-2 space-y-1">
-                              <label className="text-[11px] font-bold text-[#0026cd]">Food Choice *</label>
+                              <label className="text-[11px] font-bold text-slate-600">Age *</label>
+                              <input
+                                type="number"
+                                placeholder="Age"
+                                maxLength={3}
+                                value={p.age}
+                                onChange={(e) => updatePassenger(p.id, 'age', e.target.value)}
+                                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-white outline-none focus:ring-2 focus:ring-[#0026cd]"
+                                required
+                              />
+                            </div>
+
+                            <div className={isPremium ? "sm:col-span-2 space-y-1" : "sm:col-span-3 space-y-1"}>
+                              <label className="text-[11px] font-bold text-slate-600">Gender *</label>
                               <select
-                                value={p.food || 'VEG'}
-                                onChange={(e) => updatePassenger(p.id, 'food', e.target.value)}
-                                className="w-full px-3 py-2 rounded-xl border border-blue-300 text-xs font-bold text-[#0026cd] bg-blue-50/60 outline-none focus:ring-2 focus:ring-[#0026cd]"
+                                value={p.gender}
+                                onChange={(e) => updatePassenger(p.id, 'gender', e.target.value)}
+                                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-white outline-none focus:ring-2 focus:ring-[#0026cd]"
                               >
-                                <option value="VEG">Veg Meal</option>
-                                <option value="NON_VEG">Non-Veg</option>
-                                <option value="JAIN">Jain Meal</option>
-                                <option value="NO_FOOD">No Food</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Transgender">Transgender</option>
                               </select>
                             </div>
-                          )}
+
+                            <div className={isPremium ? "sm:col-span-2 space-y-1" : "sm:col-span-3 space-y-1"}>
+                              <label className="text-[11px] font-bold text-slate-600">Berth Preference</label>
+                              <select
+                                value={p.berth}
+                                onChange={(e) => updatePassenger(p.id, 'berth', e.target.value)}
+                                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-white outline-none focus:ring-2 focus:ring-[#0026cd]"
+                              >
+                                <option value="No preference">No preference</option>
+                                <option value="Lower">Lower</option>
+                                <option value="Middle">Middle</option>
+                                <option value="Upper">Upper</option>
+                                <option value="Side Lower">Side Lower</option>
+                                <option value="Side Upper">Side Upper</option>
+                              </select>
+                            </div>
+
+                            {/* Onboard Catering Preference - ONLY for Premium Trains (Rajdhani, Vande Bharat, Shatabdi, Tejas, Duronto) */}
+                            {isPremium && (
+                              <div className="sm:col-span-2 space-y-1">
+                                <label className="text-[11px] font-bold text-[#0026cd]">Food Choice *</label>
+                                <select
+                                  value={p.food || 'VEG'}
+                                  onChange={(e) => updatePassenger(p.id, 'food', e.target.value)}
+                                  className="w-full px-3 py-2 rounded-xl border border-blue-300 text-xs font-bold text-[#0026cd] bg-blue-50/60 outline-none focus:ring-2 focus:ring-[#0026cd]"
+                                >
+                                  <option value="VEG">Veg Meal</option>
+                                  <option value="NON_VEG">Non-Veg</option>
+                                  <option value="JAIN">Jain Meal</option>
+                                  <option value="NO_FOOD">No Food</option>
+                                </select>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
               )}

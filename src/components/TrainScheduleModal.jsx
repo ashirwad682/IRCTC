@@ -1,12 +1,42 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
+import { API_BASE_URL } from '../config/api';
 
 export default function TrainScheduleModal({ train, onClose }) {
+  const [mongoStops, setMongoStops] = useState(null);
+
+  useEffect(() => {
+    if (train && train.number) {
+      fetch(`${API_BASE_URL}/api/schedules/train/${encodeURIComponent(train.number)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.success && data.data && Array.isArray(data.data.stops)) {
+            setMongoStops(data.data.stops);
+          }
+        })
+        .catch(err => console.warn('Mongo modal schedule notice:', err));
+    }
+  }, [train?.number]);
+
   if (!train) return null;
 
   // Build authentic IRCTC schedule stops from train data or full CRIS schedule
   const getScheduleRows = () => {
-    if (train.number === '12392' || train.name.toLowerCase().includes('shramjeevi')) {
+    if (mongoStops && mongoStops.length > 0) {
+      return mongoStops.map((s, idx) => ({
+        sn: s.seq || idx + 1,
+        code: s.stationCode,
+        name: s.stationName,
+        route: 1,
+        arr: s.arrivalTime === '00:00:00' ? '--' : (s.arrivalTime || '--'),
+        dep: s.departureTime === '00:00:00' ? '--' : (s.departureTime || '--'),
+        halt: idx === 0 || idx === mongoStops.length - 1 ? '--' : '02:00',
+        dist: String(s.distance || 0),
+        day: 1
+      }));
+    }
+
+    if (train.number === '12392' || train.name?.toLowerCase().includes('shramjeevi')) {
       return [
         { sn: 1, code: 'NDLS', name: 'NEW DELHI', route: 1, arr: '--', dep: '13:10', halt: '--', dist: '0', day: 1 },
         { sn: 2, code: 'GZB', name: 'GHAZIABAD', route: 1, arr: '13:51', dep: '13:53', halt: '02:00', dist: '26', day: 1 },
