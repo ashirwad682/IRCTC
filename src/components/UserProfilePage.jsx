@@ -1613,7 +1613,7 @@ export default function UserProfilePage({ user, onLogout, onBackToSearch, onView
             ) : (
               <div className="bg-slate-50/60 p-8 rounded-2xl border border-dashed border-slate-300 text-center space-y-2">
                 <p className="text-xs font-black text-slate-700">No favorite journeys saved yet</p>
-                <p className="text-[11px] text-slate-500 font-medium">Use the form above to add your frequent routes. They will be saved to your MongoDB account and displayed on your homepage!</p>
+                <p className="text-[11px] text-slate-500 font-medium">Use the form above to add your frequent routes. They will be saved to your account and displayed on your homepage!</p>
               </div>
             )}
           </div>

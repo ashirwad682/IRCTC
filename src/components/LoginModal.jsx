@@ -729,7 +729,7 @@ export default function LoginModal({ onClose, onLoginSuccess, bookingNotice }) {
                   disabled={isSubmitting}
                   className="w-full py-3.5 rounded-xl bg-[#000066] hover:bg-blue-900 text-white font-black text-xs shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer uppercase tracking-wider disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Registering Account in MongoDB Atlas...' : 'REGISTER & CREATE ACCOUNT'}
+                  {isSubmitting ? 'Registering Account...' : 'REGISTER & CREATE ACCOUNT'}
                 </button>
               </div>
 

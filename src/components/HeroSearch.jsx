@@ -468,7 +468,7 @@ export default function HeroSearch({
               ) : (
                 <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/80 flex items-center justify-between gap-4">
                   <p className="text-xs font-bold text-slate-600">
-                    No favorite journeys added yet. Go to <strong className="text-blue-900 cursor-pointer underline" onClick={onOpenProfile}>My Account ➔ Add Recent Journey List</strong> to save your frequent routes to MongoDB Atlas!
+                    No favorite journeys added yet. Go to <strong className="text-blue-900 cursor-pointer underline" onClick={onOpenProfile}>My Account ➔ Add Recent Journey List</strong> to save your frequent routes!
                   </p>
                 </div>
               )}

@@ -803,7 +803,7 @@ export default function PassengerDetailsModal({ user, train, selectedClass, sele
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-black text-[#000066] uppercase tracking-wider flex items-center gap-1.5">
                             <Users className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                            <span>Quick Select from Saved Master List (MongoDB Atlas)</span>
+                            <span>Quick Select from Saved Master List</span>
                           </span>
                           <span className="text-[10px] font-extrabold text-blue-900 bg-blue-100 px-2 py-0.5 rounded-full">{masterPassengersList.length} Saved</span>
                         </div>

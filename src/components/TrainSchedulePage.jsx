@@ -439,7 +439,7 @@ export default function TrainSchedulePage({ initialTrainNumber = '' }) {
                     <div className="flex items-center gap-2">
                       <span className="hidden md:inline text-[10px] text-blue-200 font-bold uppercase">Use ↑ ↓ to navigate</span>
                       <span className="text-[10px] font-black text-amber-300 bg-blue-900/90 px-2.5 py-0.5 rounded-full border border-amber-400/40">
-                        MongoDB Atlas DB
+                        CRIS Official DB
                       </span>
                     </div>
                   </div>
